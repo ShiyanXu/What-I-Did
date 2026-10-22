@@ -1,0 +1,34 @@
+# 运行数据（体积大，且含隐私）
+data/
+state/
+logs/
+web/
+reports/
+
+# 本机配置与密钥：config.default.yaml 是模板（入库），config/ 里是本机实际内容
+config.yaml
+config/
+
+# 测试用的隔离数据目录（WID_HOME）
+.tmp_wid*/
+
+# 构建产物
+dist/
+.build/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 编辑器与工具
+.vscode/
+.idea/
+.workbuddy/
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store

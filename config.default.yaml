@@ -1,0 +1,133 @@
+# ============================================================
+# What-I-Did 配置（默认模板）
+#
+# 首次运行会自动复制成 config.yaml。
+# 隐私策略在采集/OCR/模型出口重读；采样与引擎等参数修改后请重启采集。
+# GUI 保存会重启采集，但修改出报钟点后仍需重新注册计划任务。
+# 无效 YAML、已知字段类型错误或非法正则会停止内容处理，不覆盖原配置。
+#
+# 所有路径都可以留空或写相对路径：
+#   - 相对路径以数据目录为基准
+#   - "C:/Users/你的名字/..." 这类绝对路径请自行替换
+# ============================================================
+
+app:
+  day_cutoff_hour: 4        # 凌晨 0-4 点算前一天（熬夜工作归属正确）
+  timezone: "Asia/Shanghai"
+
+capture:
+  interval_sec: 20          # 采样间隔（秒）
+  jitter_sec: 3             # 随机抖动，避免整齐得像机器人
+  max_width: 1920           # 落盘宽度上限；默认只抓活动窗口
+  jpeg_quality: 62          # 62 在可读性与体积间比较平衡
+  thumb_width: 480
+  keyframe_sec: 300         # 画面一直不变也每 5 分钟留一张，保证时间轴不断
+  idle_pause_sec: 300       # 无键鼠超过 5 分钟 -> 暂停采集
+  pause_on_locked: true     # 兼容旧配置；现版本锁屏始终停采集，false 也不能绕过
+  min_free_gb: 3            # 磁盘低于 3G 停止落盘
+  min_save_gap_sec: 90      # 轻微变化时最小落盘间隔
+
+dedupe:
+  hamming_threshold: 4      # dHash 汉明距离 <=4 视为相似
+  cell_grid: [12, 8]        # 12x8 网格均值差
+  cell_diff_dup: 0.02       # 网格差 <2% -> 完全重复
+  cell_diff_major: 0.22     # 网格差 >22% -> 大幅变化
+
+ocr:
+  # auto     有 Umi-OCR 就优先用它（更快），否则用内置引擎
+  # umi_http 优先 Umi-OCR 的本机 HTTP 接口，失败可降级
+  # umi_cli  优先 Umi-OCR 命令行，失败可降级
+  # rapidocr 使用内置引擎（本地计算；性能与机器有关）
+  # none     关闭识别，只记窗口标题
+  engine: auto
+
+  # 可选：已经装了 Umi-OCR 就填它的 exe 路径，能显著提速
+  # （Umi 需要在设置里开启 HTTP 服务，默认端口 1224）
+  umi_exe: ""
+
+  rapidocr:                 # 内置引擎参数
+    max_side: 1600          # 检测边长上限，越大越准也越慢
+    min_score: 0.5          # 低于这个置信度的行直接丢弃
+
+  warmup_on_start: true
+  crop_active_window: true  # 用原生分辨率裁活动窗口再识别，小字更准
+  min_interval_same_window_sec: 45
+  periodic_sample_sec: 180  # 同一窗口停留很久，也每 3 分钟抽一张
+  max_per_minute: 6
+  max_per_day: 1200
+  max_chars_per_shot: 6000
+  timeout_sec: 90
+  recover_probe_sec: 600    # 降到兜底引擎后，每隔这么久重探测一次更靠前的引擎
+  http_url: "http://127.0.0.1:1224/api/ocr" # 仅回环地址；不走代理、不跟随重定向
+
+privacy:
+  store_screenshots: true    # false 不落图；当前正式采集也不 OCR，只留脱敏标题
+  capture_scope: active_window # active_window / all_screens；窗口失败不回退全屏
+  allow_llm: true            # false 禁止所有模型请求（含连接测试），保留本地时间线
+  blocked_apps:              # 精确进程名，不分大小写；仅留匿名状态，无应用/标题/图/OCR
+    - "KeePass.exe"
+    - "1Password.exe"
+    - "Bitwarden.exe"
+    - "KeePassXC.exe"
+  skip_ocr_apps:             # 仅应用及时长：不存标题、不截图、不 OCR；旧数据重读同样过滤
+    - "WeChat.exe"
+    - "Weixin.exe"
+    - "Telegram.exe"
+    - "QQ.exe"
+  blocked_title_patterns:
+    - "(?i)(password|密码|支付|银行|身份证|私钥|助记词|无痕|InPrivate|Incognito)"
+  redact_patterns: []        # 自定义正则；写盘/历史重读/模型出口都应用，无效正则拒绝处理
+  # sk-、GitHub token（含 github_pat_）、身份证、手机号、邮箱有不可关闭的内置规则。
+  # 正则不能识别全部敏感内容，也不会给截图像素打码；敏感应用请屏蔽或暂停。
+
+retention:
+  shots_days: 7             # 截图保留天数
+  events_days: 30           # 事件流与脱敏后 OCR 文本保留天数
+  report_excerpt_days: null # 报告附录 OCR 摘录：null 跟随 events_days；0 不写摘录并在清理时清旧副本
+  keyframes_days: 30        # 兼容保留字段；尚未单独实现关键帧留存
+  max_total_gb: 20          # 清理时 data/ 超限按最旧优先删截图，不是所有数据的硬上限
+  clean_hour: 4             # 采集进程每天在此钟点后清理；未运行则不会自动清理
+
+llm:
+  # 任何 OpenAI 兼容端点都行：DeepSeek / 通义 / 智谱 / 硅基流动 / 本地 Ollama
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-chat"
+  api_key_file: "config/api_key.txt"    # 相对数据目录
+  api_key_env: "WID_LLM_API_KEY"        # 优先级高于文件
+  timeout_sec: 180
+  max_retries: 3            # 每轮最多尝试次数（包含第一次）
+  input_char_budget: 24000  # 输入字符硬上限；固定区也会被裁剪，最后兜底截断
+  max_calls_per_report: 12  # 单份日报的调用数上限（含修复轮），超限直接降级
+  temperature: 0.2
+
+report:
+  trigger_hour: 21          # 每晚几点出日报（真正的钟点，21 就是 21:00）
+  catchup_days: 7           # 开机后最多补几天的漏报
+  min_active_minutes: 20    # 有观测但活跃不足时生成空日说明；完全无观测则跳过
+  open_browser: true        # 出报后是否弹看板，不是外发审批；禁外发请用 privacy.allow_llm
+  review_mode: false        # true = 先把待发内容落到 state/day/<日>-review.json，等确认后才真正外发
+  max_upgrade_attempts: 3   # 降级日报最多自动升级几次，防止断网时反复调用
+  degraded_retry_hours: 12  # 降级日报在这个时间窗内才允许自动重试升级
+  gap_threshold_min: 10     # 间隔超过 10 分钟断块
+  max_block_min: 30         # 单块最长 30 分钟，超出切断
+  max_session_min: 60       # 行为段最长 60 分钟，超出另起一段
+  refresh_gap_min: 90       # 已出报后至少再过这么久才允许增量更新
+
+obsidian:
+  enabled: false            # 想同步到笔记库时改 true 并填 vault_dir
+  vault_dir: ""
+
+refs:
+  enabled: true
+  providers: [local_file, obsidian, url]   # kb 已注册但默认不启用
+  allow_unresolved_links: false            # 文件不存在就不生成链接，避免死链
+  cache_ttl_days: 30
+  resolve_timeout_sec: 15
+  search_roots: []          # 自动解析文档引用时搜索的目录，空则只认绝对路径
+  vault_dir: ""
+  vault_name: ""
+  kb:                       # 预留：知识库检索，本期空实现
+    enabled: false
+    scheme: "kb"
+    base_url: ""
+    url_template: ""

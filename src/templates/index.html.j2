@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What-I-Did · 工作日报看板</title>
+{% include "_style.html.j2" %}
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="hero-top">
+      <h1>工作日报看板<span class="wd">What-I-Did</span></h1>
+      <div class="badges">
+        {% if paused %}<span class="badge warn">已暂停采集</span>
+        {% elif hb_age is not none and hb_age < 180 %}<span class="badge ok">采集中</span>
+        {% elif hb_age is not none %}<span class="badge bad">采集可能已停</span>
+        {% else %}<span class="badge">未启动</span>{% endif %}
+        {% if hb_age is not none %}<span class="badge">心跳 {{ hb_age }}s 前</span>{% endif %}
+        {% if free_gb is not none %}<span class="badge">磁盘 {{ free_gb }} GB</span>{% endif %}
+        <span class="badge {{ 'ok' if has_key else 'warn' }}">{{ '模型已配置' if has_key else '未配置 Key' }}</span>
+      </div>
+    </div>
+    <p class="headline">
+      {% if heartbeat and heartbeat.state not in (none, '', 'active') %}
+        当前状态：{{ {'idle':'空闲，已暂停采集','locked':'已锁屏，暂停采集','paused':'手动暂停','blocked_app':'当前窗口在黑名单中，已暂停','blocked_title':'当前窗口标题命中隐私规则，已暂停','low_disk':'磁盘不足，停止落盘'}.get(heartbeat.state, heartbeat.state) }}
+      {% elif heartbeat %}
+        最近一次采样 {{ heartbeat.get('last_event', '') }}，今日已留存 {{ heartbeat.get('shots_today', 0) }} 张截图
+      {% else %}
+        采集器还没有上报心跳。运行 <span class="mono">python wid.py daemon</span> 或安装计划任务后开始记录。
+      {% endif %}
+    </p>
+  </header>
+
+  <section>
+    <h2>最近 30 天 <span class="sub">颜色越深表示有效活动越多，红点为缺报</span></h2>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 10px">
+      {% for h in heat %}
+        {% set colors = ['#eef2f7', '#dbeafe', '#bfdbfe', '#60a5fa', '#2563eb'] %}
+        {% if h.has %}
+        <a href="day/{{ h.day }}.html" title="{{ h.day }} · {{ h.minutes }} 分钟" style="flex:1;min-width:22px;height:34px;border-radius:5px;background:{{ colors[h.level] }};position:relative;display:block"></a>
+        {% elif h.missing %}
+        <span title="{{ h.day }} · 无记录" style="flex:1;min-width:22px;height:34px;border-radius:5px;background:#fef2f2;border:1px dashed #fecaca;display:block"></span>
+        {% else %}
+        <span title="{{ h.day }} · 无记录" style="flex:1;min-width:22px;height:34px;border-radius:5px;background:#f1f3f7;display:block"></span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <div class="ticks"><span>{{ heat[0].day if heat }}</span><span>{{ heat[-1].day if heat }}</span></div>
+  </section>
+
+  <section>
+    <h2>日报 <span class="sub">{{ reports | length }} 份</span></h2>
+    <input class="search" id="rpt-search" placeholder="搜索：项目名、成果、日期…">
+    <table id="rpt-table">
+      <thead><tr><th style="width:104px">日期</th><th>一句话</th><th style="width:58px">时长</th><th style="width:58px">成果</th><th style="width:74px">状态</th></tr></thead>
+      <tbody>
+      {% for r in reports %}
+        <tr data-text="{{ (r.day ~ ' ' ~ r.headline)|lower }}">
+          <td><a class="mono" href="day/{{ r.day }}.html">{{ r.day }}</a><div style="font-size:11px;color:#9ca3af">{{ r.weekday }}</div></td>
+          <td>{{ r.headline or '（无标题）' }}</td>
+          <td class="mono">{{ (r.minutes / 60) | round(1) }}h</td>
+          <td class="mono">{{ r.acc }}</td>
+          <td>
+            {% if r.status == 'ok' %}<span class="badge ok">正常</span>
+            {% elif r.status == 'degraded' %}<span class="badge warn">降级</span>
+            {% else %}<span class="badge">空日</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">还没有日报。21:00 会自动生成第一份，也可以手动运行 <span class="mono">python wid.py report</span>。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <footer>生成于 {{ now.strftime('%Y-%m-%d %H:%M') }} · 数据全部在本机 · 每天 21:00 自动更新</footer>
+</div>
+<script>
+(function () {
+  var s = document.getElementById('rpt-search');
+  if (!s) return;
+  s.addEventListener('input', function () {
+    var q = s.value.trim().toLowerCase();
+    document.querySelectorAll('#rpt-table tbody tr').forEach(function (tr) {
+      var txt = tr.getAttribute('data-text') || tr.textContent.toLowerCase();
+      tr.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
+    });
+  });
+})();
+</script>
+</body>
+</html>
