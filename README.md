@@ -1,69 +1,71 @@
 # What-IDid
 
-**把一天做过的事，自动整理成一份能读的日报。**
+[简体中文](README.zh-CN.md)
 
-What-IDid 是一个 Windows 桌面活动记录工具。它每 20 秒左右记下你正在用的窗口、必要时截一张图，用本地 OCR 识字，把一天切成「活动块」和「行为段」，晚上交给大模型写成一篇按时间推进的复盘，最后由本地模板渲染成 Markdown 与静态网页看板。
+**Turns what you actually did today into a daily report you can read.**
 
-它解决的是"晚上想不起来今天干了什么"。区别在于：日报里的每条结论都能点回当时的活动块与截图，而不是一段读起来顺、事后无从查证的总结。
+What-IDid is a Windows desktop activity recorder. Roughly every 20 seconds it notes which window you are using and captures a screenshot when it matters, reads the text locally with OCR, slices the day into "activity blocks" and "behavior segments", and in the evening hands the result to an LLM that writes a chronological retrospective. Local templates then render it as Markdown and a static web dashboard.
 
-![日报页](docs/images/report.png)
+It solves "at night I cannot remember what I did today". The difference is traceability: every claim in the report links back to the activity block and screenshot behind it, instead of being a smooth-sounding summary nobody can verify afterwards.
 
-<sub>日报页：左侧按日期归档，右侧是正文、行为时间轴与证据徽章（图中为演示数据）</sub>
+![Daily report](docs/images/report.png)
 
-## 特性
+<sub>Daily report: dates on the left, report body, behavior timeline and evidence badges on the right (demo data).</sub>
 
-- **全部本地处理** — 截图、OCR、分块、渲染都在本机完成；**图片永远不出本机**，只把脱敏后的文字摘要发给模型。
-- **格式不会漂** — 模型只输出严格 JSON，排版完全由本地 Jinja2 模板决定，不会今天三段、明天五段。
-- **时间由本地定** — 行为段的起止、时长、在哪切开全部本地算好，模型只能回答"这一段在干什么"，不能改时间。
-- **结论可回溯** — 关键进展与卡点必须给出活动块 ID，写不出对应证据的结论会被记为问题；引用 ID 真实存在不等于因果关系成立。
-- **断网也能用** — 没有 Key 或禁止外发时降级为纯时间线版，网络恢复后可自动重试升级。
-- **可遗忘** — 按分钟或整天删除原始数据与派生日报，删除动作会连带清理分享版和覆盖该日的周汇总。
-- **零额外依赖** — 一个文件夹拷到 Windows 10/11 x64 上双击即用，不需要装 Python，不需要管理员权限，没有数据库和 Web 框架。
+## Features
 
-## 工作原理
+- **Everything runs locally** — screenshots, OCR, segmentation and rendering all happen on your machine; **images never leave it**. Only redacted text summaries are sent to the model.
+- **The format never drifts** — the model returns strict JSON only, and layout is decided entirely by local Jinja2 templates. No three-paragraph days and five-paragraph days.
+- **Time is decided locally** — the start, end, duration and cut points of every segment are computed on your machine. The model can only answer "what was happening in this stretch", never change the time.
+- **Claims stay traceable** — key progress and blockers must cite activity block IDs; claims without evidence are recorded as issues. A real ID does not prove causation, though.
+- **Works offline** — with no API key, or with outbound calls disabled, it degrades to a plain-timeline report and retries the upgrade later when the network is back.
+- **Forgettable** — delete by minute range or by whole day; deletion also cleans the shareable export and rewrites any weekly summary covering that day.
+- **No extra dependencies** — copy one folder onto Windows 10/11 x64 and double-click. No Python, no administrator rights, no database, no web framework.
+
+## How it works
 
 ```
-每 20±3 秒   读前台窗口 / 空闲 / 锁屏 → 隐私判断 → 默认只抓活动窗口
-            dHash + 网格指纹去重 → 变化帧与周期关键帧落盘
-            按原生分辨率裁剪 → 本地 OCR（内置引擎，或本机 Umi-OCR）
+Every 20±3s   read foreground window / idle / lock screen → privacy check → capture the active window only
+              dHash + grid fingerprint dedupe → changed frames and periodic keyframes to disk
+              crop at native resolution → local OCR (built-in engine, or a local Umi-OCR)
 
-21:00       历史数据按当前隐私策略重读 → 活动块 → 行为段 → 文档引用解析
-            摘要压缩（字符硬上限）→ 出口再脱敏并检查外发开关 → 模型返回 JSON
-            本地校验 block_id / ref_id / seg_id → 渲染 Markdown + 静态 HTML
+21:00         re-read history under the current privacy policy → activity blocks → behavior segments → reference resolution
+              summary compression (hard character limit) → redact again at the boundary, check the outbound switch → model returns JSON
+              validate block_id / ref_id / seg_id locally → render Markdown + static HTML
 
-21:00 起    每 20 分钟复查一次，共 2 小时；没有新增覆盖就跳过
-登录后 3 分 补跑（晚上没开机，第二天开机时补上昨天那份）
-次日 04:05  出终版，把 21 点之后的工作也补进去
-04:00 后    清理过期的截图、事件流与报告 OCR 附录
+From 21:00    re-check every 20 minutes for 2 hours; skip when there is no new coverage
++3 min        catch-up run after login (machine was off last night, so yesterday's report is produced today)
+Next 04:05    final version, folding in work done after 21:00
+After 04:00   expire old screenshots, event streams and report OCR appendices
 ```
 
-出报有三重独立保险，任一重都能把日报生成出来：独立的计划任务（不依赖采集进程）、采集进程里的巡检兜底、界面提示与 `report` 命令。"该不该出报"只有一处判断实现，计划任务、巡检、诊断页、界面提示都调用它，不会出现"界面说该出、后台说不用出"。
+Report generation has three independent safety nets, and any one of them can produce the report: a standalone scheduled task (independent of the capture process), a watchdog inside the capture process, and a UI prompt plus the `report` command. "Should a report run now" is implemented in exactly one place, called by the scheduled task, the watchdog, the diagnostics page and the UI hint alike — so the UI never claims a report is due while the background disagrees.
 
-四个关键取舍：
+Four key trade-offs:
 
-| 取舍                    | 原因                                                |
-| --------------------- | ------------------------------------------------- |
-| 模型只负责"想说什么"，不负责"长什么样" | 输出固定 schema 的 JSON，页面由本地模板渲染，格式稳定                 |
-| 时间由本地定，模型只贴标签         | 模型一改时间，整条时间轴就和截图对不上了                              |
-| 引用强制回链                | 写不出 `block_ids` 的结论进 `issues`；只保证 ID 真实存在，不证明结论成立 |
-| 观测时长 ≠ 工时             | 暂停与锁屏已从块内扣除，但阅读、看课这类无输入活动仍会被算成低活跃                 |
+| Trade-off | Why |
+| --- | --- |
+| The model decides *what* to say, not *how* it looks | It emits fixed-schema JSON; pages are rendered by local templates, so the format stays stable |
+| Time is decided locally, the model only attaches labels | Once the model edits a timestamp, the whole timeline stops matching the screenshots |
+| References are mandatory | Claims without `block_ids` go into `issues`; this only guarantees the IDs exist, not that the conclusion holds |
+| Observed time ≠ working hours | Pauses and lock screen are already subtracted, but reading or watching a lecture still counts as low activity |
 
-## 快速开始
+## Quick start
 
-### 方式一：下载即用（推荐）
+### Option 1: download and run (recommended)
 
-1. 到 [Releases](https://github.com/ShiyanXu/What-I-Did/releases) 下载 `What-IDid-win64-*.zip`，解压到**可写**位置（如 `D:\Tools\What-IDid`、U 盘；不要放 `C:\Program Files`）。
-2. 双击 `What-IDid.exe` 打开界面；首次运行会自动生成 `config.yaml`。
-3. **设置 → API Key** 填入模型 Key，确认接口地址与模型名后保存；点「测试连接」验证。
-4. **概览 → 开始采集**；需要开机自动记录就点 **设置 → 开机自启**（免管理员）。
+1. Get `What-IDid-win64-*.zip` from [Releases](https://github.com/ShiyanXu/What-I-Did/releases) and unpack it into a **writable** location (for example `D:\Tools\What-IDid` or a USB stick; not `C:\Program Files`).
+2. Double-click `What-IDid.exe` to open the UI; the first run creates `config.yaml` automatically.
+3. Go to **Settings → API Key**, enter your model key, confirm the endpoint and model name, then save and click "Test connection" to verify.
+4. Go to **Overview → Start capture**. To record automatically at boot, click **Settings → Start at login** (no administrator rights needed).
 
-习惯命令行的话，`What-IDid.exe setup` 提供同样的引导。
+If you prefer the command line, `What-IDid.exe setup` runs the same wizard.
 
-> 首次运行 Windows 可能提示"已保护你的电脑"（exe 未做代码签名），点「更多信息」→「仍要运行」即可。若企业环境杀软误报，把整个文件夹加入白名单。
+> The first launch may show "Windows protected your PC" because the executable is not code-signed. Click "More info" → "Run anyway". If a corporate antivirus flags it, whitelist the whole folder.
 
-### 方式二：从源码运行
+### Option 2: run from source
 
-需要 Python 3.10+：
+Requires Python 3.10+:
 
 ```bat
 pip install Pillow numpy requests Jinja2 PyYAML psutil
@@ -72,152 +74,154 @@ python wid.py doctor
 python wid.py start
 ```
 
-想要内置离线 OCR，再装 `rapidocr onnxruntime`（约 100 MB）；不装则依赖本机已运行的 Umi-OCR，两者都没有时退化为"只记窗口标题"。
+For the built-in offline OCR, also install `rapidocr onnxruntime` (about 100 MB). Without it, What-IDid relies on a locally running Umi-OCR; with neither available, it degrades to recording window titles only.
 
-### 关于关闭窗口
+### About closing the window
 
-点窗口的 **×** 只是把界面收进托盘，**采集继续在后台跑**。要真正退出，右键托盘图标 →「退出（停止采集）」。这是有意的设计：记录不应该因为你顺手关了窗口就中断。
+Clicking **×** only hides the UI into the system tray — **capture keeps running**. To really quit, right-click the tray icon → "Quit (stop capture)". This is deliberate: recording should not stop just because you closed a window on your way past.
 
-## 界面
+## Interface
 
-程序只有一个界面，四个页面：
+There is a single window with four pages:
 
-| 页面     | 内容                                                                                 |
-| ------ | ---------------------------------------------------------------------------------- |
-| **概览** | 采集状态、今日活动量、磁盘余量；开始/停止/暂停/立即出报；今日行为时间轴；最近 14 天活跃度（点柱子跳到当天日报）                        |
-| **日报** | 左侧按日期归档，右侧读正文：开篇、过程、行为时间轴、人工补录、关键进展、卡点与代价、洞察、相关文档；可复制 Markdown、重新生成、打开完整看板、补录、遗忘这天 |
-| **设置** | 模型地址与 Key、外发开关、截图范围、采样间隔、OCR 引擎、出报钟点与发送前审核、保留期、隐私名单、开机自启                           |
-| **诊断** | 一键自检、实测 OCR、清理预览、打开日志与数据目录                                                         |
+| Page | Contents |
+| --- | --- |
+| **Overview** | Capture status, today's activity volume, free disk space; start / stop / pause / report now; today's behavior timeline; the last 14 days of activity (click a bar to jump to that day's report) |
+| **Reports** | Dates on the left, report body on the right: opening, narrative, behavior timeline, manual entries, key progress, blockers and cost, insights, related documents; copy the Markdown, regenerate, open the full dashboard, add a manual entry, forget this day |
+| **Settings** | Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, report time and pre-send review, retention, privacy lists, start at login |
+| **Diagnostics** | One-click self-check, live OCR test, cleanup preview, open logs and data directory |
 
-界面只负责"看"和"管"：采集由独立的后台进程负责，状态每 3 秒自刷新（收进托盘后降到 15 秒），所有慢操作都在后台线程，按钮不会卡住界面。保存设置只改写 `config.yaml` 中对应那一行，注释与格式原样保留。
+The UI only "looks" and "manages": capture is handled by a separate background process, status refreshes every 3 seconds (15 seconds once minimised to the tray), every slow operation runs on a background thread, and buttons never freeze the window. Saving settings rewrites only the relevant line in `config.yaml`, preserving comments and formatting.
 
-## 命令速览
+## Commands
 
-同一个 exe：不带参数进界面，带子命令走命令行。完整参数见[使用指南](docs/usage.md)。
+One executable: no arguments opens the UI, a subcommand runs the CLI. Full arguments are in the [usage guide](docs/usage.md).
 
-| 命令                                                                  | 作用                         |
-| ------------------------------------------------------------------- | -------------------------- |
-| `What-IDid.exe`                                                     | 打开图形界面（等同双击）               |
-| `What-IDid.exe doctor`                                              | 环境自检，`--full` 附带实测 OCR     |
-| `What-IDid.exe status`                                              | 心跳、今日事件数、截图数、磁盘、最近日报       |
-| `What-IDid.exe start` / `stop`                                      | 启动 / 停止后台采集                |
-| `What-IDid.exe pause --minutes 60` / `resume`                       | 临时暂停 / 恢复采集（开会、共享屏幕）       |
-| `What-IDid.exe report --date 2026-10-19`                            | 手动出某天日报，`--force` 强制重跑     |
-| `What-IDid.exe open`                                                | 打开看板                       |
-| `What-IDid.exe search 日报 校验 --days 30`                              | 跨日检索标题、屏幕文字与日报（只在本机扫描）     |
-| `What-IDid.exe weekly --anchor 2026-10-19`                          | 生成本周汇总（只聚合已有日报，不调模型）       |
-| `What-IDid.exe export --date 2026-10-19`                            | 导出可对外分享的日报（去截图、去原文、去本机路径）  |
-| `What-IDid.exe forget --minutes 30`                                 | 遗忘最近 30 分钟（不可逆）            |
-| `What-IDid.exe manual add --start 10:00 --end 11:00 --label "线下会议"` | 补录屏幕看不到的工作                 |
-| `What-IDid.exe review show` / `approve` / `discard`                 | 查看 / 确认外发 / 丢弃待审内容         |
-| `What-IDid.exe clean --dry-run`                                     | 预览会删掉什么，去掉 `--dry-run` 才真删 |
-| `What-IDid.exe autostart --status` / `--install` / `--remove`       | 查看 / 注册 / 移除开机自启           |
+| Command | Purpose |
+| --- | --- |
+| `What-IDid.exe` | Open the graphical UI (same as double-clicking) |
+| `What-IDid.exe doctor` | Environment self-check; `--full` also runs a live OCR test |
+| `What-IDid.exe status` | Heartbeat, today's event and screenshot counts, disk, latest report |
+| `What-IDid.exe start` / `stop` | Start / stop background capture |
+| `What-IDid.exe pause --minutes 60` / `resume` | Temporarily pause / resume capture (meetings, screen sharing) |
+| `What-IDid.exe report --date 2026-10-19` | Generate a given day's report on demand; `--force` re-runs it |
+| `What-IDid.exe open` | Open the dashboard |
+| `What-IDid.exe search 日报 校验 --days 30` | Cross-day search over titles, screen text and reports (local only) |
+| `What-IDid.exe weekly --anchor 2026-10-19` | Generate the weekly summary (aggregates existing reports, no model call) |
+| `What-IDid.exe export --date 2026-10-19` | Export a shareable report (no screenshots, no raw text, no local paths) |
+| `What-IDid.exe forget --minutes 30` | Forget the last 30 minutes (irreversible) |
+| `What-IDid.exe manual add --start 10:00 --end 11:00 --label "offline meeting"` | Record work the screen cannot see |
+| `What-IDid.exe review show` / `approve` / `discard` | Inspect / approve / discard content awaiting review |
+| `What-IDid.exe clean --dry-run` | Preview what would be deleted; drop `--dry-run` to actually delete |
+| `What-IDid.exe autostart --status` / `--install` / `--remove` | Inspect / register / remove start at login |
 
-## 日报长什么样
+## What a report looks like
 
-不是"今天用了这些软件"的流水账，而是按时间推进的一次复盘：
+Not a log of "apps I used today", but a retrospective in chronological order:
 
-| 部分      | 回答什么                                         |
-| ------- | -------------------------------------------- |
-| 标题 + 开篇 | 这天整体是什么样的一天，一两句话说清                           |
-| 过程      | 按时间顺序，每段以时刻开头：在做什么、推进到哪、遇到什么                 |
-| 行为时间轴   | `09:12–10:06 · 55 分钟 · 补上日报的幂等判断`，一行一段，按行为上色 |
-| 关键进展    | 做成了什么 + 证据（文件、命令、报错串）+ 影响                    |
-| 卡点与代价   | 卡在哪、为什么、花了多久、怎么处理                            |
-| 洞察      | 观察 + 依据（引用本地统计）+ 下次怎么做                       |
+| Section | Answers |
+| --- | --- |
+| Title + opening | What kind of day this was, in one or two sentences |
+| Narrative | In time order, each paragraph starting with a time: what you were doing, how far it got, what blocked it |
+| Behavior timeline | `09:12–10:06 · 55 min · idempotency check for the report pipeline`, one line per segment, colored by behavior |
+| Key progress | What got done + evidence (files, commands, error strings) + impact |
+| Blockers and cost | Where it stuck, why, how long it took, how it was handled |
+| Insights | Observation + evidence (citing local statistics) + what to do differently |
 
-行为类型是固定词表：写代码、排问题、验证、设计、查资料、写文档、开会、沟通、折腾环境、杂务、离开。它和应用分类是两套东西——同一个编辑器里，写新功能和在排查报错是两种行为。
+Behavior types come from a fixed vocabulary: coding, debugging, verifying, designing, researching, writing docs, meetings, communication, environment wrangling, chores, away. This is separate from app categories — inside the same editor, writing a feature and chasing an error are two different behaviors.
 
-## 数据与隐私
+## Data and privacy
 
-数据默认写在程序目录，可写性不满足时回退到 `%LOCALAPPDATA%\What-IDid`，也可以用环境变量 `WID_HOME` 指定。
+Data lives next to the program by default. If that location is not writable it falls back to `%LOCALAPPDATA%\What-IDid`, and the `WID_HOME` environment variable overrides both.
 
-| 关注点  | 做法                                                                       |
-| ---- | ------------------------------------------------------------------------ |
-| 截图   | 默认只抓活动窗口，窗口不可用时跳过而不是回退全屏                                                 |
-| 敏感应用 | `blocked_apps` 只留匿名状态；`skip_ocr_apps` 只记应用与时长，不存标题、不存图、不 OCR             |
-| 文本   | 标题与 OCR 在落盘、重读、摘要、HTTP 出口四处脱敏，内置规则覆盖密钥、身份证、手机号、邮箱                        |
-| 外发   | `privacy.allow_llm=false` 禁止一切模型请求；`report.review_mode=true` 可先看原文、确认后才发 |
-| 留存   | 截图默认 7 天，事件流与 OCR 默认 30 天，日报叙述长期保留                                       |
-| 删除   | `forget` 可按时段或整天删除，界面每份日报上也有「遗忘这天」                                       |
+| Concern | What it does |
+| --- | --- |
+| Screenshots | Captures the active window only; skips the frame when the window is unavailable instead of falling back to the full screen |
+| Sensitive apps | `blocked_apps` keeps an anonymous state only; `skip_ocr_apps` records app and duration but no title, no image, no OCR |
+| Text | Titles and OCR text are redacted in four places — at rest, on re-read, in the summary, and at the HTTP boundary; built-in rules cover secrets, ID numbers, phone numbers and emails |
+| Outbound | `privacy.allow_llm=false` blocks every model request; `report.review_mode=true` lets you read the payload and confirm before it is sent |
+| Retention | Screenshots 7 days, event streams and OCR 30 days by default; report narratives are kept long term |
+| Deletion | `forget` deletes a time range or a whole day; every report in the UI also has a "Forget this day" action |
 
-**它不能替你保证的事**：正则不理解语义，也不会给截图像素打码；已发送给模型服务、或你另存到别处的副本无法撤回；观测时长不是精确工时。详见[隐私说明](docs/privacy.md)。
+**What it cannot promise**: regular expressions do not understand semantics and will not redact pixels inside a screenshot; copies already sent to a model provider, or saved elsewhere by you, cannot be recalled; observed time is not exact working time. See the [privacy notes](docs/privacy.md).
 
-## 配置
+## Configuration
 
-配置只有一个文件 `config.yaml`（首次运行由 `config.default.yaml` 复制生成），模型地址、采样间隔、隐私名单、保留期、出报钟点都在里面。任何 OpenAI 兼容端点都能用，默认接 DeepSeek。
+There is exactly one config file, `config.yaml` (created from `config.default.yaml` on first run). Model endpoint, sampling interval, privacy lists, retention and the report hour all live there. Any OpenAI-compatible endpoint works; the default is DeepSeek.
 
-常用调整：
+Common tweaks:
 
 ```yaml
 llm:
-  base_url: "https://api.deepseek.com/v1"   # 换成通义/智谱/硅基流动/本地 Ollama 同理
+  base_url: "https://api.deepseek.com/v1"   # any compatible endpoint: Qwen, Zhipu, SiliconFlow, local Ollama
   model: "deepseek-chat"
 
 report:
-  trigger_hour: 21          # 改钟点后必须重新注册计划任务才生效
-  review_mode: false        # true = 发送前先给你看
+  trigger_hour: 21          # re-register the scheduled task after changing the hour
+  review_mode: false        # true = let you review before sending
 
 privacy:
-  capture_scope: active_window   # 需要全屏请显式改成 all_screens
+  capture_scope: active_window   # set to all_screens explicitly if you need the full screen
 ```
 
-**配置写坏时程序不会静默恢复默认值**：它会停止内容采集与外发，并在界面和 `doctor` 里说明原因，等你去修。逐项说明见[配置参考](docs/configuration.md)。
+**A broken config is never silently reset to defaults**: the program stops content capture and outbound calls, explains why in the UI and in `doctor`, and waits for you to fix it. Per-key reference: [configuration](docs/configuration.md).
 
-## 项目结构
+## Project layout
 
 ```
-wid.py                  统一入口：不带参数进界面，带子命令走命令行
-config.default.yaml     配置模板
+wid.py                  Single entry point: no arguments opens the UI, a subcommand runs the CLI
+config.default.yaml     Configuration template
 src/
-  capture.py            采集：前台窗口、空闲、锁屏 → 截图 → 去重 → 落盘
-  ocr.py                本地 OCR：Umi-OCR 优先，内置 RapidOCR 兜底
-  blocks.py             事件流 → 活动块（稳定 block_id）
-  behavior.py           活动块 → 行为段（模型只填动词与标签）
-  digest.py             把一天压进模型输入预算
-  llm.py                OpenAI 兼容客户端（一个 POST，不引 SDK）
-  validate.py           校验模型输出的 block_id / ref_id / seg_id
-  render.py             渲染 Markdown 归档与静态看板
-  report.py             出报编排：取数 → 分块 → 压缩 → 模型 → 校验 → 落盘
-  tick.py               计划任务入口，判断哪些天该出报
-  privacy.py            统一隐私边界：采集许可、匿名事件、脱敏
-  retention.py          滚动清理原始数据
-  forget.py             按分钟或整天遗忘
-  manual.py             人工补录与行为改标
-  search.py             跨日检索
-  weekly.py             周汇总
-  export_safe.py        安全分享版导出
-  gui.py / tray.py      图形界面与系统托盘（纯标准库 + ctypes）
-  refs/                 文档引用解析（本地文件、Obsidian、URL、知识库）
-scripts/                开发、自测与打包脚本
-docs/                   文档
+  capture.py            Capture: foreground window, idle, lock screen → screenshot → dedupe → disk
+  ocr.py                Local OCR: Umi-OCR first, built-in RapidOCR as fallback
+  blocks.py             Event stream → activity blocks (stable block_id)
+  behavior.py           Activity blocks → behavior segments (the model only fills verbs and labels)
+  digest.py             Compress a whole day into the model input budget
+  llm.py                OpenAI-compatible client (one POST, no SDK)
+  validate.py           Validate block_id / ref_id / seg_id coming back from the model
+  render.py             Render the Markdown archive and the static dashboard
+  report.py             Report orchestration: load → segment → compress → model → validate → write
+  tick.py               Scheduled-task entry point, decides which days are due
+  privacy.py            Single privacy boundary: capture permission, anonymous events, redaction
+  retention.py          Rolling cleanup of raw data
+  forget.py             Forget by minute range or whole day
+  manual.py             Manual entries and behavior relabeling
+  search.py             Cross-day search
+  weekly.py             Weekly summary
+  export_safe.py        Shareable export
+  gui.py / tray.py      UI and system tray (standard library + ctypes only)
+  refs/                 Document reference resolution (local files, Obsidian, URLs, knowledge bases)
+scripts/                Development, self-test and packaging scripts
+docs/                   Documentation
 ```
 
-## 文档
+## Documentation
 
-| 文档                            | 内容                                  |
-| ----------------------------- | ----------------------------------- |
-| [架构](docs/architecture.md)    | 数据流、模块职责、数据模型、设计取舍、扩展点              |
-| [使用指南](docs/usage.md)         | 界面、全部命令与参数、日报机制、补录、审核、遗忘、检索、周汇总、分享版 |
-| [配置参考](docs/configuration.md) | 每个配置项的默认值、作用与失效行为                   |
-| [隐私说明](docs/privacy.md)       | 四种采集模式、脱敏链路、外发控制、留存与删除              |
-| [构建与测试](docs/building.md)     | 源码运行、自测脚本、打包分发、常见陷阱                 |
-| [FAQ](docs/faq.md)            | 常见问题与排错路径                           |
+| Document | Contents |
+| --- | --- |
+| [Architecture](docs/architecture.md) | Data flow, module responsibilities, data model, design trade-offs, extension points |
+| [Usage guide](docs/usage.md) | UI, every command and argument, report mechanics, manual entries, review, forget, search, weekly summary, shareable export |
+| [Configuration](docs/configuration.md) | Default value, purpose and failure behavior for every key |
+| [Privacy](docs/privacy.md) | The four capture modes, the redaction chain, outbound control, retention and deletion |
+| [Building and testing](docs/building.md) | Running from source, self-test scripts, packaging, common pitfalls |
+| [FAQ](docs/faq.md) | Common questions and troubleshooting paths |
 
-## 已知限制
+The detailed documents under `docs/` are currently written in Chinese.
 
-- **观测口径不是工时**：暂停与锁屏已扣除，但阅读、看课、会议这类无输入活动仍被算作低活跃；"最长专注""碎片占比"是观测指标，不宜直接当生产力结论。
-- **因果不可证**：强制回链只保证引用的活动块真实存在，不保证结论成立。
-- **识别不完整**：OCR 受分辨率与界面可读性影响；整屏模式会包含副屏与后台窗口内容。
-- **仅 Windows**：依赖 Win32 的窗口、空闲与锁屏查询，目标为 Windows 10/11 x64，32 位与 Windows 7 不支持。
-- **混合缩放未充分验证**：多屏不同缩放比例时的行为尚未在真实环境覆盖；坐标空间不一致时会跳过该帧，最坏结果是少记几条，不会存错位的图。
+## Known limitations
 
-## 参与
+- **Observed time is not working time**: pauses and the lock screen are subtracted, but reading, watching lectures or attending meetings is still counted as low activity. "Longest focus" and "fragmentation ratio" are observation metrics, not productivity verdicts.
+- **Causation cannot be proven**: mandatory back-references only guarantee that a cited activity block exists, not that the conclusion drawn from it is right.
+- **Recognition is incomplete**: OCR quality depends on resolution and how readable the UI is; full-screen mode also includes secondary displays and background windows.
+- **Windows only**: it depends on Win32 queries for window, idle and lock screen state. Targets Windows 10/11 x64; 32-bit and Windows 7 are not supported.
+- **Mixed scaling is not thoroughly validated**: behavior with different per-monitor scaling factors has not been covered on real hardware. When coordinate spaces disagree the frame is skipped, so the worst case is a few missing records rather than misaligned images.
 
-- 改代码、跑自测、提交 PR：[参与开发](CONTRIBUTING.md)
-- 发现隐私或安全缺陷：按[安全策略](SECURITY.md)私下报告，**不要**开公开 issue
-- 使用问题：先看 [FAQ](docs/faq.md)，仍没解决再开 issue
+## Contributing
 
-## 许可
+- Code, self-tests, pull requests: see [contributing](CONTRIBUTING.md)
+- Privacy or security defects: report privately per the [security policy](SECURITY.md) — **do not** open a public issue
+- Usage questions: check the [FAQ](docs/faq.md) first, and open an issue if that does not help
+
+## License
 
 [MIT](LICENSE)

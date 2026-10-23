@@ -44,6 +44,7 @@ datas = [
     (str(SRC / "templates"), "src/templates"),
     (str(ROOT / "config.default.yaml"), "."),
     (str(ROOT / "README.md"), "."),
+    (str(ROOT / "README.zh-CN.md"), "."),
     (str(ROOT / "LICENSE"), "."),
     # 整个 docs 目录一起打：新增文档不必再来改这份清单
     (str(ROOT / "docs"), "docs"),
