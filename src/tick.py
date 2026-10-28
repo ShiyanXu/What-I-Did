@@ -115,6 +115,20 @@ def pending(cfg, now=None, days: int | None = None) -> list[tuple[str, str]]:
     return out
 
 
+def _final_day(candidates: list[tuple[str, str]], now, cfg) -> str | None:
+    """候选项里窗口已关闭（终版）的最新一天；没有则 None。
+
+    `candidates` 已按日期新→旧排好，第一个窗口关闭的就是刚收尾的那一天：
+    04:05 补的终版，或漏报后登录补跑的第一版。当天的窗口必然还开着
+    （`workday_of` 保证 now 落在当天窗口内），所以它永远不会出现在这里。
+    """
+    for day, _why in candidates:
+        _, we = timeutil.day_window(day, cfg.cutoff_hour)
+        if now >= we:
+            return day
+    return None
+
+
 def run(cfg, log, limit: int = 3) -> int:
     now = timeutil.now()
     today = timeutil.workday_of(now, cfg.cutoff_hour)
@@ -129,12 +143,16 @@ def run(cfg, log, limit: int = 3) -> int:
         log.info("tick: 待生成 %d 天：%s", len(candidates),
                  "、".join(f"{d}({w})" for d, w in candidates))
 
+    # 自动弹浏览器只留给终版：窗口已关闭才弹。21:00 首版和晚间断点增量
+    # 更新都不弹，免得一晚弹好几遍；一次补多天漏报时也只弹最新那一天，
+    # 更早的进索引页自己看。手动 report / GUI 出报不走这里，不受限制。
+    final_day = _final_day(candidates, now, cfg)
     rc = 0
     for day, why in candidates[:limit]:  # 单次最多补 3 天，避免开机瞬间连跑
         reason = "catchup" if (day != today or why == "补终版") else "auto"
         try:
             res = report_mod.generate(day, cfg, log, reason=reason, force=False,
-                                      open_browser=(day == today))
+                                      open_browser=(day == final_day))
             if log:
                 log.info("tick: %s(%s) -> %s", day, why, res.get("status"))
             if res.get("status") not in ("ok", "skipped", "degraded", "empty", "busy", "nodata",

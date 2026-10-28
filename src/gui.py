@@ -1484,7 +1484,7 @@ class SettingsPage(tk.Frame):
         self._row(g, r, "每天几点生成", self._spin(g, "report.trigger_hour", 0, 23),
                   "默认 21:00，次日 04:05 再出终版"); r += 1
         self._row(g, r, "有效活动低于多少分钟算空日", self._spin(g, "report.min_active_minutes", 0, 600)); r += 1
-        self._row(g, r, "生成后自动打开网页", self._check(g, "report.open_browser", "打开浏览器看板")); r += 1
+        self._row(g, r, "生成后自动打开网页", self._check(g, "report.open_browser", "终版出报后打开浏览器看板")); r += 1
         self._row(g, r, "发送前先给我看", self._check(g, "report.review_mode", "生成待审内容，确认后才外发"),
                   "开启后到点只准备内容、不调用模型；需要在日报页点「审核并发送」"); r += 1
         self._row(g, r, "截图保留天数", self._spin(g, "retention.shots_days", 1, 365),

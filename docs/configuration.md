@@ -124,7 +124,7 @@
 | `trigger_hour` | `21` | 每晚几点出报。改完必须重新注册计划任务 |
 | `catchup_days` | `7` | 开机后最多补几天漏报 |
 | `min_active_minutes` | `20` | 有观测但活跃不足时生成空日说明；完全无观测则跳过 |
-| `open_browser` | `true` | 出报后是否弹看板。**这不是外发审批**，禁止外发请用 `privacy.allow_llm` |
+| `open_browser` | `true` | 出报后是否弹看板。自动出报**仅终版弹**（21:00 首版与晚间增量更新不弹，一次补多天也只弹最新那天）；手动 `report` 每次生成都弹，`--no-open` 可禁。**这不是外发审批**，禁止外发请用 `privacy.allow_llm` |
 | `review_mode` | `false` | `true` 时先把待发内容落盘，确认后才真正外发 |
 | `max_upgrade_attempts` | `3` | 降级日报最多自动升级几次，防止断网时反复调用 |
 | `degraded_retry_hours` | `12` | 降级日报在这个时间窗内才允许自动重试升级 |

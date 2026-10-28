@@ -104,7 +104,7 @@ report:
   trigger_hour: 21          # 每晚几点出日报（真正的钟点，21 就是 21:00）
   catchup_days: 7           # 开机后最多补几天的漏报
   min_active_minutes: 20    # 有观测但活跃不足时生成空日说明；完全无观测则跳过
-  open_browser: true        # 出报后是否弹看板，不是外发审批；禁外发请用 privacy.allow_llm
+  open_browser: true        # 出报后是否弹看板（自动出报仅终版弹），不是外发审批；禁外发请用 privacy.allow_llm
   review_mode: false        # true = 先把待发内容落到 state/day/<日>-review.json，等确认后才真正外发
   max_upgrade_attempts: 3   # 降级日报最多自动升级几次，防止断网时反复调用
   degraded_retry_hours: 12  # 降级日报在这个时间窗内才允许自动重试升级
