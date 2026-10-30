@@ -150,7 +150,14 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
 
 **日报**（`reports/<日期>.json`）顶层：`schema_version`、`day`、`weekday`、`generated_at`、`revision`、`status`、`reason`、`coverage`、`report`、`stats`、`gaps`、`blocks`、`refs`、`manual`、`meta`。
 
-其中 `report` 是模型产出的结构化内容（`headline`、`opening_md`、`summary_md`、`behaviors`、`highlights`、`friction`、`insight`、`timeline`、`accomplishments` 等），`meta` 记录模型、调用次数、token、payload 大小与校验问题。
+其中 `report` 是模型产出的结构化内容（`headline`、`opening_md`、`summary_md`、`behaviors`、`highlights`、`followups`、`friction`、`insight`、`timeline`、`accomplishments` 等），`meta` 记录模型、调用次数、token、payload 大小与校验问题。
+
+阅读顺序由渲染层派生，不写死在模型输出里。`render.reading_view()` 是唯一的派生入口：
+
+- `highlights` 每条带 `status`（`done|advanced|waiting|blocked|unresolved`）与 `next`，渲染成首屏成果卡；旧日报没有这两个字段时按文字推断，判定函数只有 `behavior.outcome_status()` 一处。
+- `followups` 是需要行动的事；旧日报没有时由 `friction`（未解决）与 `tomorrow` 合成。
+- 主时间轴由 `behavior.group_tasks()` 把 `behaviors` 合并成 4–6 段（同动词、断档 ≤25 分钟、单段 ≤150 分钟），锁屏/离开段排除。
+- 活动块、原始色带、全部文档、OCR、数据缺口、生成信息一律进页面底部折叠附录；正文只保留挂在成果卡上的文档与最多 3 张截图。
 
 **人工补录**（`data/<日期>/manual.json`）：
 

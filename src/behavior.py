@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import blocks as blocks_mod
 import timeutil
@@ -32,6 +32,44 @@ VERBS: dict[str, dict] = {
     "away":          {"label": "离开", "color": "#cbd5e1"},
 }
 VERB_KEYS = tuple(k for k in VERBS if k != "away")
+
+# 成果状态：一张成果卡只回答一件事——这件事到哪一步了。
+# 四类够用：做完了 / 有进展但没完 / 卡在别人手上 / 还没解决。
+OUTCOME_STATUS = {
+    "done": ("已完成", "done"),
+    "advanced": ("已推进", "adv"),
+    "waiting": ("待外部", "wait"),
+    "blocked": ("受阻", "blk"),
+    "unresolved": ("未解决", "open"),
+}
+_STATUS_ALIAS = {
+    "done": "done", "complete": "done", "completed": "done", "finished": "done", "ok": "done",
+    "partial": "advanced", "advanced": "advanced", "progress": "advanced", "ongoing": "advanced",
+    "waiting": "waiting", "pending": "waiting", "external": "waiting", "blocked": "blocked",
+    "unresolved": "unresolved", "open": "unresolved",
+}
+UNRESOLVED = re.compile(r"未解决|仍未|还没|尚未|没有解决|未修复|未处理|没修好")
+WAITING = re.compile(r"待(?!办)|等(客户|对方|外部|答复|确认|回复)|未确定|未定|等待|pending", re.I)
+ADVANCED = re.compile(r"基本|初步|部分|推进中|起草|刚开始")
+
+
+def outcome_status(raw, *texts) -> str:
+    """成果状态归一。模型给了就用模型的；没给（旧日报）按文字推断。
+
+    这是唯一一处判定，validate（写入）与 render（展示）都调它，
+    免得同一个"待客户答复"在 JSON 里是 waiting、在页面里变成已完成。
+    """
+    key = _STATUS_ALIAS.get(str(raw or "").strip().lower(), "")
+    if key:
+        return key
+    blob = " ".join(str(t or "") for t in texts)
+    if UNRESOLVED.search(blob):
+        return "unresolved"
+    if WAITING.search(blob):
+        return "waiting"
+    if ADVANCED.search(blob):
+        return "advanced"
+    return "done"
 
 CAT_TO_VERB = {
     "dev": "coding",
@@ -253,6 +291,191 @@ def prompt_section(sessions: list[Session], text_limit: int = 700) -> str:
         else:
             lines.append("文字：（这一段没有 OCR 文本，只能靠标题推断，可以标低置信度）")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- 任务段（主时间轴）
+# 行为段是"连续不离开屏幕的一段"，一天十来个；主时间轴要的是"任务推进的几段"。
+# 这里把行为段按主线合并，得到 4–6 段：同一件事在短时间里来回切应用不算换任务。
+TASK_GAP_MIN = 25          # 同一条主线允许的断档
+TASK_SHORT_MIN = 10        # 不到 10 分钟的段视为过渡，允许被邻近主线吸收
+TASK_MAX_SPAN = 150        # 一段任务最长跨多久：再往后就是另一件事了
+TASK_MAX = 6               # 主时间轴最多几段
+TASK_MIN_MIN = 5           # 太短且没有成果的段不占主时间轴
+
+_AWAY_PAT = re.compile(r"锁屏|离开|午休|空闲|未操作|挂机|下班|inactive")
+
+
+def _span(it: dict, day: str, window_start: datetime | None) -> tuple[datetime, datetime] | None:
+    """行为段的真实起止。优先 ISO；旧数据只有 HH:MM 时按工作日窗口推日期。"""
+    if it.get("start_iso") and it.get("end_iso"):
+        try:
+            return timeutil.parse(it["start_iso"]), timeutil.parse(it["end_iso"])
+        except Exception:
+            pass
+    try:
+        start = timeutil.parse(f"{day}T{str(it['start'])[:5]}:00+08:00")
+        end = timeutil.parse(f"{day}T{str(it['end'])[:5]}:00+08:00")
+    except Exception:
+        return None
+    if window_start is not None and start.date() == window_start.date() and start.time() < window_start.time():
+        start += timedelta(days=1)      # 04:00 之前的钟点属于"当晚"
+        end += timedelta(days=1)
+    if end <= start:
+        end += timedelta(days=1)
+    return start, end
+
+
+def is_away(it: dict) -> bool:
+    """锁屏/离开这类段不进主时间轴：它们解释不了工作推进了什么。"""
+    if str(it.get("verb") or "") == "away":
+        return True
+    label = str(it.get("label") or "")
+    return bool(_AWAY_PAT.search(label)) and int(it.get("minutes") or 0) <= 40
+
+
+def _minutes(it: dict) -> int:
+    try:
+        return max(1, int(it.get("minutes") or 0))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _can_join(group: list[dict], it: dict, span: tuple[datetime, datetime] | None,
+              prev_span: tuple[datetime, datetime] | None,
+              first_span: tuple[datetime, datetime] | None) -> bool:
+    if span is None or prev_span is None:
+        return False
+    gap = (span[0] - prev_span[1]).total_seconds() / 60
+    if gap < 0:
+        gap = 0.0
+    if gap > TASK_GAP_MIN:
+        return False
+    # 一段任务不能无限长：下午从 13:35 一路并到 18:06，读者就分不出这里面是几件事了
+    if first_span is not None:
+        span_min = (span[1] - first_span[0]).total_seconds() / 60
+        if span_min > TASK_MAX_SPAN:
+            return False
+    if gap <= 5:
+        return True
+    # 只跟"上一段"比动词：拿整组的动词集合去比，一天下来什么都能并进来
+    last_verb = str(group[-1].get("verb") or "")
+    if last_verb and str(it.get("verb") or "") == last_verb:
+        return True
+    return _minutes(it) < TASK_SHORT_MIN or _minutes(group[-1]) < TASK_SHORT_MIN
+
+
+def _pack(group: list[dict], spans: dict[str, tuple[datetime, datetime]]) -> dict:
+    """把一组行为段合成一个任务段。时间取组的首尾，标签取最长的那段。"""
+    total = sum(_minutes(x) for x in group) or 1
+    by_verb: dict[str, int] = {}
+    for x in group:
+        v = str(x.get("verb") or "admin")
+        by_verb[v] = by_verb.get(v, 0) + _minutes(x)
+    primary = max(by_verb.items(), key=lambda kv: kv[1])[0]
+    main = max(group, key=_minutes)
+
+    details: list[str] = []
+    labels: list[str] = []
+    for x in group:
+        if x.get("label") and x["label"] not in labels:
+            labels.append(str(x["label"]))
+        d = str(x.get("detail") or "").strip()
+        if d and d not in details:
+            details.append(d)
+
+    first, last = group[0], group[-1]
+    s = spans.get(str(first.get("seg_id")))
+    e = spans.get(str(last.get("seg_id")))
+    label = str(main.get("label") or "").strip() or (labels[0] if labels else "工作")
+    return {
+        "task_id": "",                     # 由调用方按顺序编号
+        "start": str(first.get("start") or ""),
+        "end": str(last.get("end") or ""),
+        "start_iso": timeutil.iso(s[0]) if s else "",
+        "end_iso": timeutil.iso(e[1]) if e else "",
+        "minutes": int(round(total)),
+        "verb": primary,
+        "label": label,
+        "detail": "；".join(details[:2])[:220],
+        "items": [{"seg_id": x.get("seg_id", ""), "start": x.get("start", ""),
+                   "end": x.get("end", ""), "minutes": _minutes(x),
+                   "label": str(x.get("label") or ""),
+                   "verb": str(x.get("verb") or "")} for x in group],
+        "seg_ids": [x.get("seg_id", "") for x in group],
+        "switches": sum(int(x.get("switches") or 0) for x in group),
+        "block_ids": [],                   # 由 render 按成果卡补齐
+        "confidence": "low" if all(str(x.get("confidence")) == "low" for x in group) else "medium",
+    }
+
+
+def group_tasks(behaviors: list[dict], day: str = "", window_start: datetime | None = None,
+                max_tasks: int = TASK_MAX, min_task_min: int = TASK_MIN_MIN) -> dict:
+    """把十几段行为合成 4–6 段"任务推进"，供主时间轴使用。
+
+    规则（全部本地计算，结果可复现）：
+    - 锁屏/离开段直接排除，不算任务；计入 `away_minutes`；
+    - 与上一段的间隔 ≤25 分钟、且（同行为动词 / 有一段是短过渡）才合并；
+    - 段数超过 max_tasks 时，反复合并"间隔最小的相邻一对"；
+    - 剩下的段不足 min_task_min 且没有成果挂靠时，降级为"其他片段"，不占主时间轴。
+
+    返回 {"tasks": [...], "away_minutes": int, "away_count": int, "merged": int, "dropped": [...]}。
+    """
+    ordered = sorted(behaviors or [], key=lambda x: str(x.get("start_iso") or x.get("start") or ""))
+    spans = {}
+    for it in ordered:
+        sp = _span(it, day, window_start)
+        if sp:
+            spans[str(it.get("seg_id"))] = sp
+
+    tasks: list[list[dict]] = []
+    away = [it for it in ordered if is_away(it)]
+    for it in ordered:
+        if is_away(it):
+            continue
+        if tasks and _can_join(tasks[-1], it, spans.get(str(it.get("seg_id"))),
+                               spans.get(str(tasks[-1][-1].get("seg_id"))),
+                               spans.get(str(tasks[-1][0].get("seg_id")))):
+            tasks[-1].append(it)
+        else:
+            tasks.append([it])
+
+    def gap_between(a: list[dict], b: list[dict]) -> float:
+        sa = spans.get(str(a[-1].get("seg_id")))
+        sb = spans.get(str(b[0].get("seg_id")))
+        if not sa or not sb:
+            return 1e9
+        return max(0.0, (sb[0] - sa[1]).total_seconds() / 60)
+
+    # 段太多：从间隔最小的相邻对开始并
+    while len(tasks) > max_tasks:
+        best, best_gap = None, None
+        for i in range(len(tasks) - 1):
+            g = gap_between(tasks[i], tasks[i + 1])
+            if best_gap is None or g < best_gap:
+                best, best_gap = i, g
+        if best is None:
+            break
+        tasks[best] = tasks[best] + tasks[best + 1]
+        del tasks[best + 1]
+
+    packed = [_pack(g, spans) for g in tasks]
+    packed.sort(key=lambda t: str(t.get("start_iso") or t.get("start")))
+
+    kept, dropped = [], []
+    for t in packed:
+        (kept if t["minutes"] >= min_task_min else dropped).append(t)
+    if not kept and packed:
+        kept, dropped = packed, []
+
+    for i, t in enumerate(kept, 1):
+        t["task_id"] = f"task-{i:02d}"
+    return {
+        "tasks": kept,
+        "dropped": dropped,
+        "merged": max(0, len([b for b in ordered if not is_away(b)]) - len(kept)),
+        "away_minutes": sum(_minutes(x) for x in away),
+        "away_count": len(away),
+    }
 
 
 def timeline_segments(behaviors: list[dict], day_minutes: int = 1440) -> list[dict]:

@@ -18,67 +18,50 @@ tags:
 > [!summary] 一句话
 > {{ d.report.headline or "（无标题）" }}
 
-**覆盖范围** {{ d.coverage.window }}　|　**有效活动** {{ (d.stats.active_minutes / 60) | round(1) }} 小时　|　**活动块** {{ d.stats.block_count }}　|　**截图** {{ d.stats.shot_count }}
-{% if d.stats.rhythm and d.stats.rhythm.longest_focus_min %}**最长专注** {{ d.stats.rhythm.longest_focus_min }} 分钟（{{ d.stats.rhythm.longest_focus_at }}）　|　**连续段** {{ d.stats.rhythm.session_count }} 段　|　**被打断** {{ d.stats.rhythm.interruptions }} 次　|　**整段工作** {{ d.stats.rhythm.deep_work_min }} 分钟
-{% endif %}
-{% if d.report.opening_md %}{{ d.report.opening_md }}
-{% endif %}
-## 过程
+**覆盖范围** {{ d.coverage.note or d.coverage.window }}　|　**成果** {{ rv.cards | length }} 项　|　**待跟进** {{ rv.todos | length }} 项　|　**有效活动** {{ (d.stats.active_minutes / 60) | round(1) }} 小时　|　**会议** {{ d.stats.by_category.meet | default(0) | round(0) | int }} 分
+{% if rv.cards %}
+## 今日成果
 
-{% if d.report.summary_md %}{{ d.report.summary_md }}
-{% else %}_{{ d.report.notes_for_human or "这一天没有生成叙述性总结。" }}_
+{% for c in rv.cards %}- **【{{ c.status_label }}】{{ c.what }}**
+{% if c.impact %}  - 意义：{{ c.impact }}
+{% endif %}{% if c.next %}  - 下一步：{{ c.next }}
+{% endif %}{% if c.evidence %}  - 证据：{{ c.evidence }}
+{% endif %}{% if c.docs %}  - 文档：{% for r in c.docs %}[{{ r.label }}]({{ r.uri }}){{ " " if not loop.last else "" }}{% endfor %}
+{% endif %}{% endfor %}
 {% endif %}
-{% if d.report.behaviors %}
-## 行为时间轴
+{% if rv.todos %}
+## 待办与卡点
 
-| 时间 | 时长 | 行为 | 具体在做什么 |
+{% for t in rv.todos %}- 【{{ {'waiting':'待外部','blocked':'卡点','todo':'待办'}.get(t.kind, '待办') }}】{{ t.item }}{{ "　— " ~ t.why if t.why else "" }}
+{% endfor %}
+{% endif %}
+{% if rv.tasks %}
+## 工作主线
+
+> [!info] 由 {{ rv.task_notes.segments }} 个连续工作段按主线合并为 {{ rv.task_notes.tasks }} 段
+{% if rv.task_notes.merged %}> 另有 {{ rv.task_notes.merged }} 个短切换已并入所属主线。
+{% endif %}
+| 时间 | 时长 | 在做什么 | 这段的结果 |
 |---|---|---|---|
-{% for it in d.report.behaviors %}| {{ it.start }}–{{ it.end }} | {{ it.minutes }} 分 | **{{ it.label }}**{{ " ?" if it.confidence == "low" else "" }} | {{ it.detail or "—" }} |
+{% for t in rv.tasks %}| {{ t.start }}–{{ t.end }} | {{ t.minutes }} 分 | **{{ t.label }}**{{ "　" ~ t.detail if t.detail else "" }} | {{ t.outcome or "—" }} |
 {% endfor %}
 {% endif %}
-{% if d.report.offline %}
-## 人工补录
+## 时间分配
 
-> [!note] 屏幕看不到的工作
-> 以下由本人手动登记，不属于屏幕活动统计。
-
-| 时间 | 事项 | 说明 |
-|---|---|---|
-{% for o in d.report.offline %}| {{ o.start }}–{{ o.end }} | **{{ o.label }}** | {{ o.note or "—" }} |
+{% for key, minutes in d.stats.by_category.items() %}- {{ cat_label.get(key, key) }} {{ minutes }} 分
 {% endfor %}
+{% if d.stats.rhythm and d.stats.rhythm.longest_focus_min %}- 最长专注 {{ d.stats.rhythm.longest_focus_min }} 分钟（{{ d.stats.rhythm.longest_focus_at }}），被打断 {{ d.stats.rhythm.interruptions }} 次，碎片段占 {{ (d.stats.rhythm.fragmented_ratio * 100) | round(0) | int }}%
 {% endif %}
-{% if d.report.highlights %}
-## 关键进展
+{% if d.report.insight %}
+## 补充观察
 
-{% for it in d.report.highlights %}- **{{ it.what }}**{{ "　·　证据：" ~ it.evidence if it.evidence else "" }}{{ "　·　影响：" ~ it.impact if it.impact else "" }}
-{% endfor %}
-{% elif d.report.accomplishments %}
-## 成果
-
-{% for it in d.report.accomplishments %}- {{ it.what }}{{ "（" ~ {"partial":"部分完成","blocked":"受阻"}.get(it.status, it.status) ~ "）" if it.status and it.status != "done" else "" }}{{ "　— " ~ it.impact if it.impact else "" }}
+{% for it in d.report.insight %}- **{{ it.observation }}**{{ "　·　依据：" ~ it.evidence if it.evidence else "" }}{{ "　·　下次：" ~ it.action if it.action else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.friction %}
 ## 卡点与代价
 
 {% for it in d.report.friction %}- **{{ it.what }}**{{ "　·　原因：" ~ it.cause if it.cause else "" }}{{ "　·　代价：" ~ it.cost if it.cost else "" }}{{ "　·　处理：" ~ it.fix if it.fix else "" }}
-{% endfor %}
-{% elif d.report.blockers %}
-## 卡点
-
-{% for it in d.report.blockers %}- {{ it.what }}{{ "　`" ~ it.detail ~ "`" if it.detail else "" }}
-{% endfor %}
-{% endif %}
-{% if d.report.insight %}
-## 洞察
-
-{% for it in d.report.insight %}- **{{ it.observation }}**{{ "　·　依据：" ~ it.evidence if it.evidence else "" }}{{ "　·　下次：" ~ it.action if it.action else "" }}
-{% endfor %}
-{% endif %}
-{% if d.report.in_progress %}
-## 进行中
-
-{% for it in d.report.in_progress %}- {{ it.what }}{{ "　— " ~ it.state if it.state else "" }}{{ "　**下一步**：" ~ it.next if it.next else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.decisions %}
@@ -93,23 +76,50 @@ tags:
 {% for it in d.report.learnings %}- {{ it.what }}
 {% endfor %}
 {% endif %}
-{% if d.report.tomorrow %}
+{% if rv.tomorrow_extra %}
 ## 明天
 
-{% for it in d.report.tomorrow %}- [ ] {{ it.item }}{{ "　（" ~ it.when ~ "）" if it.when else "" }}{{ "　— " ~ it.why if it.why else "" }}
+{% for it in rv.tomorrow_extra %}- [ ] {{ it.item }}{{ "　（" ~ it.when ~ "）" if it.when else "" }}{{ "　— " ~ it.why if it.why else "" }}
+{% endfor %}
+{% endif %}
+{% if d.report.offline %}
+## 人工补录
+
+> [!note] 屏幕看不到的工作
+> 以下由本人手动登记，不属于屏幕活动统计。
+
+| 时间 | 事项 | 说明 |
+|---|---|---|
+{% for o in d.report.offline %}| {{ o.start }}–{{ o.end }} | **{{ o.label }}** | {{ o.note or "—" }} |
+{% endfor %}
+{% endif %}
+{% if d.report.behaviors %}
+## 附录 A · 连续工作段
+
+| 时间 | 时长 | 行为 | 具体在做什么 |
+|---|---|---|---|
+{% for it in d.report.behaviors %}| {{ it.start }}–{{ it.end }} | {{ it.minutes }} 分 | **{{ it.label }}**{{ " ?" if it.confidence == "low" else "" }} | {{ it.detail or "—" }} |
 {% endfor %}
 {% endif %}
 {% if d.refs %}
-## 相关文档
+## 附录 B · 相关文档
 
 {% for r in d.refs %}- [{{ r.label }}]({{ r.uri }}){{ "（暂不可跳转）" if not r.clickable else "" }}
 {% endfor %}
 {% endif %}
 {% if d.gaps %}
-> [!warning] 数据缺口
-> {% for g in d.gaps %}{{ g.start }}–{{ g.end }}（{{ g.minutes }} 分）{{ "、" if not loop.last else "" }}{% endfor %} 没有采集记录，这些时间不算进上面的时长。
+## 附录 C · 数据缺口
+
+> [!warning] 全窗口内没有采集记录的时段（含夜间与正常休息，不算进上面的时长）：{% for g in d.gaps %}{{ g.start }}–{{ g.end }}（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}{{ "。" }}
+{% endif %}
+{% if d.report.opening_md or d.report.summary_md %}
+## 附录 D · 过程叙述
+
+{% if d.report.opening_md %}{{ d.report.opening_md }}
 
 {% endif %}
----
+{% if d.report.summary_md %}{{ d.report.summary_md }}
+{% else %}_{{ d.report.notes_for_human or "这一天没有生成叙述性总结。" }}_
+{% endif %}{% endif %}{{ "\n" }}---
 
 *由 What-I-Did 于 {{ d.generated_at }} 生成（第 {{ d.revision }} 版，{{ d.meta.model or "未调用模型" }}）*

@@ -51,9 +51,15 @@ class Handler(BaseHTTPRequestHandler):
             ],
             "highlights": [
                 {"what": "冻结版完整跑通审核与发送",
+                 "status": "done",
                  "evidence": "假模型服务的回包 + 本地校验通过",
                  "impact": "确认打包产物不含 ImportError，链路无缺件",
+                 "next": "",
                  "block_ids": bids[:1]},
+            ],
+            "followups": [
+                {"item": "用真实 Key 跑一次端到端", "kind": "waiting",
+                 "why": "等真实模型额度到位后才能验证摘要质量", "block_ids": bids[1:2]},
             ],
             "friction": [
                 {"what": "缺少真实模型 Key 无法端到端验证",

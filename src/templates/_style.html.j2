@@ -29,6 +29,7 @@
   .badge.bad { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
   .headline { font-size: 17px; margin: 14px 0 2px; line-height: 1.55; color: #1f2937; }
   .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 16px 0 22px; }
+  .cards.four { grid-template-columns: repeat(4, 1fr); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .card .n { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
   .card .n small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 3px; }
@@ -70,10 +71,57 @@
   .item .what { font-weight: 600; margin-bottom: 4px; }
   .item .impact { color: #4b5563; font-size: 13.5px; }
   .item .foot { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .st { font-size: 11px; padding: 1px 7px; border-radius: 4px; }
+  .st { font-size: 11px; padding: 1px 7px; border-radius: 4px; white-space: nowrap; }
   .st.done { background: #ecfdf5; color: #047857; }
   .st.partial { background: #fffbeb; color: #b45309; }
   .st.blocked { background: #fef2f2; color: #b91c1c; }
+  .st.adv { background: #eff6ff; color: #1d4ed8; }
+  .st.wait { background: #fffbeb; color: #b45309; }
+  .st.blk { background: #fef2f2; color: #b91c1c; }
+  .st.open { background: #fef2f2; color: #b91c1c; }
+  .st.todo { background: #f1f5f9; color: #475569; }
+  /* 成果卡：状态｜结果｜意义｜下一步，证据折叠在卡内 */
+  .outcome-list { display: grid; gap: 10px; }
+  .outcome { border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fcfdff; }
+  .outcome.o-done { border-left-color: #10b981; }
+  .outcome.o-adv { border-left-color: #2563eb; }
+  .outcome.o-wait { border-left-color: #d97706; }
+  .outcome.o-open, .outcome.o-blk { border-left-color: #dc2626; }
+  .o-head { display: flex; gap: 9px; align-items: baseline; flex-wrap: wrap; }
+  .o-what { font-weight: 600; font-size: 15px; line-height: 1.5; }
+  .o-body { margin-top: 6px; display: grid; gap: 4px; }
+  .o-line { margin: 0; font-size: 13.5px; color: #4b5563; }
+  .o-line b { display: inline-block; font-size: 11px; font-weight: 600; color: #6b7280; background: #f1f5f9; border-radius: 4px; padding: 0 6px; margin-right: 8px; vertical-align: 1px; }
+  .o-line.next { color: #92400e; }
+  .o-line.next b { background: #fef3c7; color: #b45309; }
+  .ev-box { margin-top: 8px; }
+  .ev-box summary { font-size: 11.5px; }
+  .ev-quote { margin-top: 8px; font-size: 12.5px; color: #475569; background: #f8fafc; border-left: 2px solid #cbd5e1; padding: 7px 10px; border-radius: 0 6px 6px 0; word-break: break-word; }
+  .ev-shot { margin-top: 10px; }
+  .ev-cap { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  /* 待办与卡点 */
+  .todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .todo-list li { display: grid; grid-template-columns: 62px 1fr; gap: 12px; align-items: start; border-top: 1px dashed var(--line); padding-top: 9px; }
+  .todo-list li:first-child { border-top: 0; padding-top: 0; }
+  .todo-list .st { text-align: center; }
+  .todo-item { font-weight: 550; }
+  .todo-why { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  /* 工作主线 */
+  .lanes { margin-top: 12px; }
+  .lanes td { vertical-align: top; }
+  .lane-dur { font-size: 10px; color: #9ca3af; }
+  .lane-label { font-weight: 550; }
+  .lane-detail { font-size: 12.5px; color: #6b7280; margin-top: 2px; }
+  .lane-out { font-size: 13px; color: #065f46; }
+  .lane-note { margin: 10px 0 0; }
+  .gap-line { margin-top: 14px; font-size: 12.5px; }
+  /* 附录 */
+  .appx { border-top: 1px dashed var(--line); margin-top: 10px; padding-top: 10px; }
+  .appx:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .appx > summary { font-size: 13px; font-weight: 550; color: #374151; padding: 4px 0; }
+  .appx[open] > summary { color: var(--accent); margin-bottom: 10px; }
+  .appx-body { padding: 2px 0 6px; }
+  .tiny { font-size: 10px; color: #9ca3af; }
   .refchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; }
   .refchip.obsidian { border-color: #ede9fe; background: #f5f3ff; color: #6d28d9; }
   .refchip.file { border-color: #d1fae5; background: #ecfdf5; color: #047857; }
@@ -104,8 +152,9 @@
   .search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #2563eb1a; }
   footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 26px; }
   @media (max-width: 760px) {
-    .cards { grid-template-columns: repeat(2, 1fr); }
+    .cards, .cards.four { grid-template-columns: repeat(2, 1fr); }
     .grid2 { grid-template-columns: 1fr; }
+    .todo-list li { grid-template-columns: 1fr; gap: 4px; }
     .tl li { grid-template-columns: 1fr; gap: 4px; }
     .bar { grid-template-columns: 70px 1fr 48px; }
     .wrap { padding: 16px 12px 60px; }

@@ -18,84 +18,114 @@
         {% if d.status == 'ok' %}<span class="badge ok">模型生成</span>
         {% elif d.status == 'degraded' %}<span class="badge warn">降级 · 仅时间线</span>
         {% else %}<span class="badge mute">空日</span>{% endif %}
+        <span class="badge">{{ {'auto':'21:00 自动','manual':'手动生成','catchup':'开机补跑','finalize':'次日终版'}.get(d.reason, d.reason) }}</span>
+        <span class="badge">{{ d.coverage.note or d.coverage.window }}</span>
         <span class="badge">第 {{ d.revision }} 版</span>
         {% if d.report.confidence %}<span class="badge">置信度 {{ d.report.confidence }}</span>{% endif %}
-        <span class="badge">覆盖 {{ d.coverage.window }}</span>
-        {% if d.meta.model %}<span class="badge">{{ d.meta.model }}</span>{% endif %}
       </div>
     </div>
     <p class="headline">{{ d.report.headline or '（无标题）' }}</p>
   </header>
 
-  <div class="cards">
-    <div class="card"><div class="n">{{ (d.stats.active_minutes / 60) | round(1) }}<small>h</small></div><div class="k">有效活动</div></div>
-    <div class="card"><div class="n">{{ d.stats.block_count }}</div><div class="k">活动块</div></div>
-    <div class="card"><div class="n">{{ rhythm.longest_focus_min or 0 }}<small>分</small></div><div class="k">最长连续专注</div></div>
-    <div class="card"><div class="n">{{ rhythm.session_count or 0 }}</div><div class="k">连续工作段</div></div>
-    <div class="card"><div class="n">{{ d.refs | length }}</div><div class="k">文档引用</div></div>
+  <div class="cards{% if rv.metrics | length == 4 %} four{% endif %}">
+    {% for m in rv.metrics %}
+    <div class="card"><div class="n">{{ m.n }}<small>{{ m.unit }}</small></div><div class="k">{{ m.k }}</div></div>
+    {% endfor %}
   </div>
 
-  <section>
-    <h2>一天概览 <span class="sub">{{ d.coverage.window }}{% if not d.coverage.complete %} · 当日未结束，21:00 后还会出终版{% endif %}</span></h2>
-    <div class="daystrip">
-      {% for s in segs %}
-      <a class="seg" href="#{{ s.id }}" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></a>
-      {% endfor %}
-    </div>
-    <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
-    <div class="legend">
-      {% for key, label in cat_label.items() %}
-      {% if key in d.stats.by_category %}
-      <span><i style="background:{{ {'dev':'#2563eb','doc':'#0d9488','meet':'#d97706','comm':'#7c3aed','web':'#64748b','other':'#94a3b8'}[key] }}"></i>{{ label }} {{ d.stats.by_category[key] }} 分</span>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% if rhythm.longest_focus_min %}
-    <div class="rhythm">
-      <span>最长专注 <b>{{ rhythm.longest_focus_min }} 分</b>（{{ rhythm.longest_focus_at }}）</span>
-      <span>被打断 <b>{{ rhythm.interruptions }}</b> 次</span>
-      <span>碎片段 <b>{{ rhythm.fragmented_min }} 分</b>（{{ (rhythm.fragmented_ratio * 100) | round(0) | int }}%）</span>
-      <span>整段工作 <b>{{ rhythm.deep_work_min }} 分</b></span>
-      <span>活动最密 <b>{{ rhythm.peak_window }}</b></span>
-    </div>
-    {% endif %}
-  </section>
-
-  {% if d.report.opening_md %}
-  <section>
-    <h2>这一天是什么样的一天</h2>
-    <div class="prose">
-      {% for para in d.report.opening_md.split('\n\n') if para.strip() %}
-      <p>{{ para | replace('\n', ' ') }}</p>
+  {% if rv.cards %}
+  <section id="outcomes">
+    <h2>今日成果 <span class="sub">{{ rv.cards | length }} 项 · 每条都能追到原始记录</span></h2>
+    <div class="outcome-list">
+      {% for c in rv.cards %}
+      <article class="outcome o-{{ c.status_cls }}">
+        <div class="o-head">
+          <span class="st {{ c.status_cls }}">{{ c.status_label }}</span>
+          <div class="o-what">{{ c.what }}</div>
+        </div>
+        <div class="o-body">
+          {% if c.impact %}<p class="o-line"><b>意义</b>{{ c.impact }}</p>{% endif %}
+          {% if c.next %}<p class="o-line next"><b>下一步</b>{{ c.next }}</p>{% endif %}
+        </div>
+        {% if c.evidence or c.docs or c.shot or c.block_ids %}
+        <details class="ev-box">
+          <summary>证据{% if c.evidence %} · 摘录{% endif %}{% if c.shot %} · 截图{% endif %}{% if c.docs %} · 文档 {{ c.docs | length }}{% endif %}</summary>
+          {% if c.evidence %}<div class="ev-quote">{{ c.evidence }}</div>{% endif %}
+          {% if c.shot %}
+          <div class="ev-shot">
+            <img class="thumb" src="{{ c.shot.thumb }}" data-img="{{ c.shot.full }}" loading="lazy" alt="">
+            <div class="ev-cap">{{ c.shot.caption }}</div>
+          </div>
+          {% endif %}
+          {% if c.docs %}
+          <div class="chips">
+            {% for r in c.docs %}
+              {% if r.clickable %}<a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.uri }}">📄 {{ r.label }}</a>
+              {% else %}<span class="refchip off" title="{{ r.uri }}">{{ r.label }}</span>{% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if c.block_ids %}
+          <div class="chips">{% for bid in c.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
+          {% endif %}
+        </details>
+        {% endif %}
+      </article>
       {% endfor %}
     </div>
   </section>
   {% endif %}
 
-  {% if behaviors %}
-  <section>
-    <h2>行为时间轴 <span class="sub">时间由本地按采集数据切，行为由模型推测；拿不准的标 ?</span></h2>
-    <div class="daystrip tall">
-      {% for s in bsegs %}
-      <span class="seg" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></span>
-      {% endfor %}
-    </div>
-    <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
-    <ul class="tl">
-      {% for it in behaviors %}
+  {% if rv.todos %}
+  <section id="todos">
+    <h2>待办与卡点 <span class="sub">接下来要动的 {{ rv.todos | length }} 件事</span></h2>
+    <ul class="todo-list">
+      {% for t in rv.todos %}
       <li>
-        <div class="t">{{ it.start }}–{{ it.end }}<div class="dur">{{ it.minutes }} 分</div></div>
-        <div class="body">
-          <div class="title"><span class="vdot" style="background:{{ (verbs.get(it.verb) or {}).get('color', '#94a3b8') }}"></span>{{ it.label }}{% if it.confidence == 'low' %}<span class="q">?</span>{% endif %}</div>
-          {% if it.detail %}<div class="impact">{{ it.detail }}</div>{% endif %}
-          <div class="chips">
-            <span class="chip">{{ (verbs.get(it.verb) or {}).get('label', it.verb) }}</span>
-            {% if it.switches %}<span class="chip">切换 {{ it.switches }} 次</span>{% endif %}
-          </div>
+        <span class="st {{ {'waiting':'wait','blocked':'blk','todo':'todo'}.get(t.kind, 'todo') }}">{{ {'waiting':'待外部','blocked':'卡点','todo':'待办'}.get(t.kind, '待办') }}</span>
+        <div class="todo-body">
+          <div class="todo-item">{{ t.item }}</div>
+          {% if t.why %}<div class="todo-why">{{ t.why }}</div>{% endif %}
         </div>
       </li>
       {% endfor %}
     </ul>
+  </section>
+  {% endif %}
+
+  {% if rv.tasks %}
+  <section id="mainline">
+    <h2>工作主线 <span class="sub">{{ rv.task_notes.tasks }} 段 · 由 {{ rv.task_notes.segments }} 个连续工作段按主线合并</span></h2>
+    <div class="daystrip tall">
+      {% for s in rv.task_segs %}
+      <span class="seg" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></span>
+      {% endfor %}
+    </div>
+    <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
+    <table class="lanes">
+      <thead><tr><th style="width:118px">时间</th><th>在做什么</th><th style="width:38%">这段的结果</th></tr></thead>
+      <tbody>
+        {% for t in rv.tasks %}
+        <tr>
+          <td class="mono">{{ t.start }}–{{ t.end }}<div class="lane-dur">{{ t.minutes }} 分</div></td>
+          <td>
+            <div class="lane-label"><span class="vdot" style="background:{{ (verbs.get(t.verb) or {}).get('color', '#94a3b8') }}"></span>{{ t.label }}</div>
+            {% if t.detail %}<div class="lane-detail">{{ t.detail }}</div>{% endif %}
+          </td>
+          <td>
+            {% if t.outcome %}<span class="lane-out">{{ t.outcome }}</span>
+            {% else %}<span class="empty">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if rv.task_notes.merged or rv.task_notes.away %}
+    <p class="empty lane-note">
+      {% if rv.task_notes.merged %}已把 {{ rv.task_notes.merged }} 个短切换并入所属主线，逐段明细见附录。{% endif %}
+      {% if rv.task_notes.away %}另有 {{ rv.task_notes.away }} 段锁屏/离开未计入主线。{% endif %}
+    </p>
+    {% endif %}
   </section>
   {% endif %}
 
@@ -117,68 +147,42 @@
   </section>
   {% endif %}
 
-  <section>
-    <h2>过程</h2>
-    <div class="prose">
-      {% if d.report.summary_md %}
-        {% for para in d.report.summary_md.split('\n\n') if para.strip() %}
-          <p>{{ para | replace('\n', ' ') }}</p>
-        {% endfor %}
-      {% else %}
-        <p class="empty">{{ d.report.notes_for_human or '这一天没有生成叙述性总结。' }}</p>
+  <section id="time">
+    <h2>时间分配 <span class="sub">这部分说明时间花在哪，不是成果本身</span></h2>
+    <div class="legend">
+      {% for key, label in cat_label.items() %}
+      {% if key in d.stats.by_category %}
+      <span><i style="background:{{ {'dev':'#2563eb','doc':'#0d9488','meet':'#d97706','comm':'#7c3aed','web':'#64748b','other':'#94a3b8'}[key] }}"></i>{{ label }} {{ d.stats.by_category[key] }} 分</span>
       {% endif %}
+      {% endfor %}
+      <span>有效活动 {{ (d.stats.active_minutes / 60) | round(1) }} 小时{% if d.stats.idle_minutes %}（另有 {{ d.stats.idle_minutes }} 分暂停/锁屏，未计入）{% endif %}</span>
     </div>
+    {% if rhythm.longest_focus_min %}
+    <div class="rhythm">
+      <span>最长专注 <b>{{ rhythm.longest_focus_min }} 分</b>（{{ rhythm.longest_focus_at }}）</span>
+      <span>被打断 <b>{{ rhythm.interruptions }}</b> 次</span>
+      <span>碎片段 <b>{{ rhythm.fragmented_min }} 分</b>（{{ (rhythm.fragmented_ratio * 100) | round(0) | int }}%）</span>
+      <span>整段工作 <b>{{ rhythm.deep_work_min }} 分</b></span>
+      <span>活动最密 <b>{{ rhythm.peak_window }}</b></span>
+    </div>
+    {% endif %}
+    {% if rv.gaps.inside %}
+    <div class="callout info gap-line">
+      记录中断（{{ rv.gaps.first }}–{{ rv.gaps.last }} 之间）：{% for g in rv.gaps.inside %}<b>{{ g.start }}–{{ g.end }}</b>（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}。多半是离开、会议或休息，这些时间不算进上面的时长。
+    </div>
+    {% endif %}
   </section>
 
+  {% set ins = d.report.insight %}
+  {% if ins %}
   <section>
-    <h2>活动块明细 <span class="sub">按应用切分，点证据编号可跳到原始记录；用于核对上面每条推测</span></h2>
-    <input class="search" id="tl-search" placeholder="过滤…（输入文件名、应用名、标题）">
-    <ul class="tl" id="tl-list">
-      {% if d.report.timeline %}
-        {% for it in d.report.timeline %}
-        <li data-text="{{ (it.title ~ ' ' ~ it.app)|lower }}">
-          <div class="t">{{ it.start or '--:--' }}–{{ it.end or '--:--' }}</div>
-          <div class="body">
-            <div class="title">{{ it.title }}</div>
-            <div class="chips">
-              {% if it.app %}<span class="chip">{{ it.app }}</span>{% endif %}
-              <span class="chip cat" style="background:{{ {'dev':'#2563eb','doc':'#0d9488','meet':'#d97706','comm':'#7c3aed','web':'#64748b','other':'#94a3b8'}.get(it.category, '#94a3b8') }}">{{ cat_label.get(it.category, it.category) }}</span>
-              {% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}
-            </div>
-          </div>
-        </li>
-        {% endfor %}
-      {% else %}
-        {% for b in blocks %}
-        <li data-text="{{ (b.title ~ ' ' ~ b.app)|lower }}">
-          <div class="t">{{ b.start[11:16] }}–{{ b.end[11:16] }}</div>
-          <div class="body">
-            <div class="title">{{ b.title or b.app or '(无标题)' }}</div>
-            <div class="chips">
-              <span class="chip">{{ b.app or '-' }}</span>
-              <span class="chip cat" style="background:{{ b._color }}">{{ b._cat_label }}</span>
-              <span class="chip">{{ b.minutes }} 分</span>
-              <a class="ev" href="#{{ b.id }}">{{ b.id }}</a>
-            </div>
-          </div>
-        </li>
-        {% endfor %}
-      {% endif %}
-    </ul>
-    {% if not d.report.timeline and not blocks %}<p class="empty">没有时间线记录。</p>{% endif %}
-  </section>
-
-  {% set hi = d.report.highlights %}
-  {% if hi %}
-  <section>
-    <h2>关键进展 <span class="sub">{{ hi | length }} 项</span></h2>
+    <h2>另外两点观察 <span class="sub">对工作方式的判断，不是复述</span></h2>
     <div class="grid2">
-      {% for it in hi %}
+      {% for it in ins %}
       <div class="item">
-        <div class="what">{{ it.what }}</div>
-        {% if it.evidence %}<div class="impact"><b>证据</b>　<span class="mono">{{ it.evidence }}</span></div>{% endif %}
-        {% if it.impact %}<div class="impact"><b>影响</b>　{{ it.impact }}</div>{% endif %}
-        <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
+        <div class="what">{{ it.observation }}</div>
+        {% if it.evidence %}<div class="impact"><b>依据</b>　{{ it.evidence }}</div>{% endif %}
+        {% if it.action %}<div class="impact"><b>下次</b>　{{ it.action }}</div>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -206,53 +210,11 @@
   </section>
   {% endif %}
 
-  {% set ins = d.report.insight %}
-  {% if ins %}
+  {% if d.report.decisions or d.report.learnings or d.report.in_progress or d.report.blockers %}
   <section>
-    <h2>洞察 <span class="sub">对工作方式的判断，不是复述</span></h2>
+    <h2>补充记录</h2>
     <div class="grid2">
-      {% for it in ins %}
-      <div class="item">
-        <div class="what">{{ it.observation }}</div>
-        {% if it.evidence %}<div class="impact"><b>依据</b>　{{ it.evidence }}</div>{% endif %}
-        {% if it.action %}<div class="impact"><b>下次</b>　{{ it.action }}</div>{% endif %}
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  {% if not hi and d.report.accomplishments %}
-  {% set acc = d.report.accomplishments %}
-  <section>
-    <h2>成果 <span class="sub">{{ acc | length }} 项</span></h2>
-    <div class="grid2">
-      {% for it in acc %}
-      <div class="item">
-        <div class="what">{{ it.what }}</div>
-        {% if it.impact %}<div class="impact">{{ it.impact }}</div>{% endif %}
-        <div class="foot">
-          <span class="st {{ it.status }}">{{ {'done':'已完成','partial':'部分完成','blocked':'受阻'}.get(it.status, it.status) }}</span>
-          {% if it.artifact and it.artifact.label %}
-            {% set r = refs.get(it.artifact.ref_id) if it.artifact.ref_id else None %}
-            {% if r %}
-              <a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.uri }}">📄 {{ it.artifact.label }}</a>
-            {% else %}
-              <span class="refchip off">{{ it.artifact.label }}</span>
-            {% endif %}
-          {% endif %}
-          {% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  {% if d.report.in_progress or d.report.blockers %}
-  <section>
-    <h2>进行中 / 卡点</h2>
-    <div class="grid2">
+      {% if d.report.in_progress %}
       <div>
         <h3>进行中</h3>
         {% for it in d.report.in_progress %}
@@ -262,26 +224,22 @@
           {% if it.next %}<div class="impact"><b>下一步：</b>{{ it.next }}</div>{% endif %}
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
-        {% else %}<p class="empty">无</p>{% endfor %}
+        {% endfor %}
       </div>
+      {% endif %}
+      {% if d.report.blockers %}
       <div>
-        <h3>卡点</h3>
+        <h3>其他卡点</h3>
         {% for it in d.report.blockers %}
         <div class="item" style="margin-bottom:10px">
           <div class="what">{{ it.what }}</div>
           {% if it.detail %}<div class="impact mono">{{ it.detail }}</div>{% endif %}
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
-        {% else %}<p class="empty">无</p>{% endfor %}
+        {% endfor %}
       </div>
-    </div>
-  </section>
-  {% endif %}
-
-  {% if d.report.decisions or d.report.learnings %}
-  <section>
-    <h2>决策与收获</h2>
-    <div class="grid2">
+      {% endif %}
+      {% if d.report.decisions %}
       <div>
         <h3>决策</h3>
         {% for it in d.report.decisions %}
@@ -289,28 +247,31 @@
           {% if it.why %}<div class="impact">{{ it.why }}</div>{% endif %}
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
-        {% else %}<p class="empty">无</p>{% endfor %}
+        {% endfor %}
       </div>
+      {% endif %}
+      {% if d.report.learnings %}
       <div>
         <h3>收获</h3>
         {% for it in d.report.learnings %}
         <div class="item" style="margin-bottom:10px"><div class="what">{{ it.what }}</div>
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
-        {% else %}<p class="empty">无</p>{% endfor %}
+        {% endfor %}
       </div>
+      {% endif %}
     </div>
   </section>
   {% endif %}
 
-  {% if d.report.tomorrow %}
+  {% if rv.tomorrow_extra %}
   <section>
-    <h2>明天</h2>
+    <h2>明天 <span class="sub">今天的遗留怎么接着做</span></h2>
     <ul class="tl">
-      {% for it in d.report.tomorrow %}
+      {% for it in rv.tomorrow_extra %}
       <li style="grid-template-columns:26px 1fr">
         <div class="t">☐</div>
-        <div class="body"><div class="title">{{ it.item }}</div>{% if it.why %}<div class="impact">{{ it.why }}</div>{% endif %}</div>
+        <div class="body"><div class="title">{{ it.item }}</div>{% if it.why %}<div class="impact">{{ it.why }}</div>{% endif %}{% if it.when %}<div class="chips"><span class="chip">{{ it.when }}</span></div>{% endif %}</div>
       </li>
       {% endfor %}
     </ul>
@@ -332,69 +293,133 @@
   </section>
   {% endif %}
 
-  {% if d.gaps %}
-  <section>
-    <h2>数据缺口</h2>
-    <div class="callout">
-      以下时段没有采集记录，可能是离开、开会、午休或采集被暂停：
-      {% for g in d.gaps %}<b>{{ g.start }}–{{ g.end }}</b>（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  {% if refs_list %}
-  <section>
-    <h2>相关文档 <span class="sub">本期只做跳转，不改动任何外部文档</span></h2>
-    <div class="chips">
-      {% for r in refs_list %}
-        {% if r.clickable %}
-        <a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.why }} · {{ r.uri }}">{{ r.label }}</a>
-        {% else %}
-        <span class="refchip off" title="{{ r.uri }}">{{ r.label }}</span>
-        {% endif %}
-      {% endfor %}
-    </div>
-    <p class="empty" style="margin-top:10px">灰色为已识别但暂不可跳转（如知识库目标尚未接入）。</p>
-  </section>
-  {% endif %}
+  <!-- ============================ 证据与附录：默认折叠 ============================ -->
 
   <section id="appendix">
-    <h2>附录 A · 活动块原始记录 <span class="sub">{{ blocks | length }} 块</span></h2>
-    <table>
-      <thead><tr><th style="width:78px">时间</th><th style="width:52px">分钟</th><th style="width:110px">应用</th><th>标题 / 文字摘录</th><th style="width:140px">截图</th></tr></thead>
-      <tbody>
-      {% for b in blocks %}
-        <tr id="{{ b.id }}">
-          <td class="mono">{{ b.start[11:16] }}–{{ b.end[11:16] }}<div style="font-size:10px;color:#9ca3af">{{ b.id }}</div></td>
-          <td class="mono">{{ b.minutes }}</td>
-          <td>{{ b.app or '-' }}<div style="font-size:11px;color:#9ca3af">{{ b._cat_label }}</div></td>
-          <td>
-            <div>{{ b.title or '(无标题)' }}</div>
-            {% if b.text %}
-            <details><summary>展开文字摘录（{{ b.text | length }} 字）</summary><pre>{{ b.text }}</pre></details>
-            {% endif %}
-          </td>
-          <td>{% if b._thumb %}<img class="thumb" src="{{ b._thumb }}" data-img="{{ b._full }}" loading="lazy" alt="">{% else %}<span class="empty">—</span>{% endif %}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    <h2>证据与附录 <span class="sub">要核对结论时再展开；日常阅读不需要翻到这里</span></h2>
 
-  <section>
-    <h2>附录 B · 生成信息</h2>
-    <table>
-      <tbody>
-        <tr><th style="width:140px">生成时间</th><td class="mono">{{ d.generated_at }}</td></tr>
-        <tr><th>触发原因</th><td>{{ {'auto':'每日 21:00 自动','manual':'手动','catchup':'开机补跑','finalize':'次日终版'}.get(d.reason, d.reason) }}</td></tr>
-        <tr><th>模型</th><td class="mono">{{ d.meta.model or '未调用' }}（调用 {{ d.meta.calls }} 次，输入 {{ d.meta.prompt_tokens }} / 输出 {{ d.meta.completion_tokens }} tokens）</td></tr>
-        <tr><th>输入规模</th><td>{{ d.meta.payload_chars }} 字（预算 {{ d.meta.payload_budget }}），详写 {{ d.meta.blocks_detailed }} / {{ d.meta.blocks_total }} 块</td></tr>
-        <tr><th>耗时</th><td>{{ d.meta.elapsed_ms }} ms</td></tr>
-        {% if d.meta.issues %}
-        <tr><th>校验提示</th><td>{% for i in d.meta.issues %}<div>· {{ i }}</div>{% endfor %}</td></tr>
+    <details class="appx" id="appendix-blocks">
+      <summary>活动块明细 · {{ blocks | length }} 块（按应用切分，含截图与文字摘录）</summary>
+      <div class="appx-body">
+        <input class="search" id="tl-search" placeholder="过滤…（输入文件名、应用名、标题）">
+        <table>
+          <thead><tr><th style="width:92px">时间</th><th style="width:52px">分钟</th><th style="width:110px">应用</th><th>标题 / 文字摘录</th><th style="width:120px">截图</th></tr></thead>
+          <tbody id="tl-list">
+          {% for b in blocks %}
+            <tr id="{{ b.id }}" data-text="{{ (b.title ~ ' ' ~ b.app) | lower }}">
+              <td class="mono">{{ b.start[11:16] }}–{{ b.end[11:16] }}<div class="tiny">{{ b.id }}</div></td>
+              <td class="mono">{{ b.minutes }}</td>
+              <td>{{ b.app or '-' }}<div class="tiny">{{ b._cat_label }}</div></td>
+              <td>
+                <div>{{ b.title or '(无标题)' }}</div>
+                {% if b.text %}
+                <details><summary>展开文字摘录（{{ b.text | length }} 字）</summary><pre>{{ b.text }}</pre></details>
+                {% endif %}
+              </td>
+              <td>{% if b._thumb %}<img class="thumb" src="{{ b._thumb }}" data-img="{{ b._full }}" loading="lazy" alt="">{% else %}<span class="empty">—</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% if not blocks %}<p class="empty">没有活动块记录。</p>{% endif %}
+      </div>
+    </details>
+
+    {% if segs or bsegs %}
+    <details class="appx">
+      <summary>原始色带 · 每个活动块单独上色（{{ blocks | length }} 块 / {{ behaviors | length }} 个连续工作段）</summary>
+      <div class="appx-body">
+        <div class="daystrip tall">
+          {% for s in segs %}
+          <a class="seg" href="#{{ s.id }}" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></a>
+          {% endfor %}
+        </div>
+        <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
+        {% if behaviors %}
+        <div class="legend" style="margin-top:12px"><span>行为段被 <b>{{ d.report.behaviors | length }}</b> 个连续工作段切分，逐段说明：</span></div>
+        <ul class="tl" style="margin-top:6px">
+          {% for it in behaviors %}
+          <li>
+            <div class="t">{{ it.start }}–{{ it.end }}<div class="dur">{{ it.minutes }} 分</div></div>
+            <div class="body">
+              <div class="title"><span class="vdot" style="background:{{ (verbs.get(it.verb) or {}).get('color', '#94a3b8') }}"></span>{{ it.label }}{% if it.confidence == 'low' %}<span class="q">?</span>{% endif %}</div>
+              {% if it.detail %}<div class="impact">{{ it.detail }}</div>{% endif %}
+              <div class="chips">
+                <span class="chip">{{ (verbs.get(it.verb) or {}).get('label', it.verb) }}</span>
+                {% if it.switches %}<span class="chip">切换 {{ it.switches }} 次</span>{% endif %}
+              </div>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
         {% endif %}
-      </tbody>
-    </table>
+      </div>
+    </details>
+    {% endif %}
+
+    {% if refs_list %}
+    <details class="appx">
+      <summary>相关文档 · {{ refs_list | length }} 条（正文只挂了能支撑结论的那些）</summary>
+      <div class="appx-body">
+        <div class="chips">
+          {% for r in refs_list %}
+            {% if r.clickable %}
+            <a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.why }} · {{ r.uri }}">{{ r.label }}</a>
+            {% else %}
+            <span class="refchip off" title="{{ r.uri }}">{{ r.label }}</span>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <p class="empty" style="margin-top:10px">灰色为已识别但暂不可跳转（如知识库目标尚未接入）。本期只做跳转，不改动任何外部文档。</p>
+      </div>
+    </details>
+    {% endif %}
+
+    {% if d.report.opening_md or d.report.summary_md %}
+    <details class="appx">
+      <summary>叙述全文 · {{ '开篇与过程' if d.report.opening_md else '过程' }}（原样保留，供需要时通读）</summary>
+      <div class="appx-body prose">
+        {% if d.report.opening_md %}
+        {% for para in d.report.opening_md.split('\n\n') if para.strip() %}<p>{{ para | replace('\n', ' ') }}</p>{% endfor %}
+        {% endif %}
+        {% if d.report.summary_md %}
+        {% for para in d.report.summary_md.split('\n\n') if para.strip() %}<p>{{ para | replace('\n', ' ') }}</p>{% endfor %}
+        {% else %}
+        <p class="empty">{{ d.report.notes_for_human or '这一天没有生成叙述性总结。' }}</p>
+        {% endif %}
+      </div>
+    </details>
+    {% endif %}
+
+    <details class="appx">
+      <summary>数据缺口与生成信息</summary>
+      <div class="appx-body">
+        {% if d.gaps %}
+        <div class="callout">
+          全窗口（{{ d.coverage.window }}）内没有任何采集记录的时段，含夜间与正常休息，这里只是完整列出：
+          {% for g in d.gaps %}<b>{{ g.start }}–{{ g.end }}</b>（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        <table style="margin-top:12px">
+          <tbody>
+            <tr><th style="width:140px">窗口</th><td class="mono">{{ d.coverage.window or ('04:00 – 次日 04:00') }}{% if d.coverage.until %} · 截至 {{ d.coverage.until }}{% endif %}</td></tr>
+            <tr><th>首末记录</th><td class="mono">{{ d.stats.first or '—' }} → {{ d.stats.last or '—' }}</td></tr>
+            <tr><th>采集规模</th><td>{{ d.stats.block_count }} 个活动块 · {{ d.stats.shot_count }} 张截图 · {{ d.stats.ocr_blocks }} 块有文字识别 · {{ d.refs | length }} 条文档引用 · {{ rhythm.session_count or 0 }} 个连续工作段</td></tr>
+            <tr><th>生成时间</th><td class="mono">{{ d.generated_at }}</td></tr>
+            <tr><th>触发原因</th><td>{{ {'auto':'每日 21:00 自动','manual':'手动','catchup':'开机补跑','finalize':'次日终版'}.get(d.reason, d.reason) }}</td></tr>
+            <tr><th>模型</th><td class="mono">{{ d.meta.model or '未调用' }}（调用 {{ d.meta.calls }} 次，输入 {{ d.meta.prompt_tokens }} / 输出 {{ d.meta.completion_tokens }} tokens）</td></tr>
+            <tr><th>输入规模</th><td>{{ d.meta.payload_chars }} 字（预算 {{ d.meta.payload_budget }}），详写 {{ d.meta.blocks_detailed }} / {{ d.meta.blocks_total }} 块</td></tr>
+            <tr><th>耗时</th><td>{{ d.meta.elapsed_ms }} ms</td></tr>
+            {% if d.report.notes_for_human %}
+            <tr><th>不确定的地方</th><td>{{ d.report.notes_for_human }}</td></tr>
+            {% endif %}
+            {% if d.meta.issues %}
+            <tr><th>校验提示</th><td>{% for i in d.meta.issues %}<div>· {{ i }}</div>{% endfor %}</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   </section>
 
   <footer>What-I-Did · 截图与 OCR 全部在本机完成，仅文本摘要发送给模型</footer>
@@ -416,12 +441,23 @@
   if (s) {
     s.addEventListener('input', function () {
       var q = s.value.trim().toLowerCase();
-      document.querySelectorAll('#tl-list li').forEach(function (li) {
-        var txt = li.getAttribute('data-text') || li.textContent.toLowerCase();
-        li.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
+      document.querySelectorAll('#tl-list tr').forEach(function (tr) {
+        var txt = tr.getAttribute('data-text') || tr.textContent.toLowerCase();
+        tr.style.display = (!q || txt.indexOf(q) >= 0) ? '' : 'none';
       });
     });
   }
+  // 从正文点证据编号跳到折叠附录时，先把对应折叠块展开
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a.ev');
+    if (!a) return;
+    var target = document.getElementById((a.getAttribute('href') || '').slice(1));
+    if (!target) return;
+    var box = target.closest('details');
+    while (box) { box.open = true; box = box.parentElement && box.parentElement.closest('details'); }
+    setTimeout(function () { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 30);
+    e.preventDefault();
+  });
 })();
 </script>
 </body>

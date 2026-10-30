@@ -17,7 +17,7 @@ It solves "at night I cannot remember what I did today". The difference is trace
 - **Everything runs locally** — screenshots, OCR, segmentation and rendering all happen on your machine; **images never leave it**. Only redacted text summaries are sent to the model.
 - **The format never drifts** — the model returns strict JSON only, and layout is decided entirely by local Jinja2 templates. No three-paragraph days and five-paragraph days.
 - **Time is decided locally** — the start, end, duration and cut points of every segment are computed on your machine. The model can only answer "what was happening in this stretch", never change the time.
-- **Claims stay traceable** — key progress and blockers must cite activity block IDs; claims without evidence are recorded as issues. A real ID does not prove causation, though.
+- **Claims stay traceable** — outcome cards and blockers must cite activity block IDs; claims without evidence are recorded as issues. A real ID does not prove causation, though.
 - **Works offline** — with no API key, or with outbound calls disabled, it degrades to a plain-timeline report and retries the upgrade later when the network is back.
 - **Forgettable** — delete by minute range or by whole day; deletion also cleans the shareable export and rewrites any weekly summary covering that day.
 - **No extra dependencies** — copy one folder onto Windows 10/11 x64 and double-click. No Python, no administrator rights, no database, no web framework.
@@ -87,7 +87,7 @@ There is a single window with four pages:
 | Page | Contents |
 | --- | --- |
 | **Overview** | Capture status, today's activity volume, free disk space; start / stop / pause / report now; today's behavior timeline; the last 14 days of activity (click a bar to jump to that day's report) |
-| **Reports** | Dates on the left, report body on the right: opening, narrative, behavior timeline, manual entries, key progress, blockers and cost, insights, related documents; copy the Markdown, regenerate, open the full dashboard, add a manual entry, forget this day |
+| **Reports** | Dates on the left, report body on the right: today's outcomes (status, result, why it matters, next step), follow-ups and blockers, work mainline, time split, blockers and cost, insights; evidence (raw blocks, screenshots, OCR, all documents, gaps) stays collapsed in the appendix; copy the Markdown, regenerate, open the full dashboard, add a manual entry, forget this day |
 | **Settings** | Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, report time and pre-send review, retention, privacy lists, start at login |
 | **Diagnostics** | One-click self-check, live OCR test, cleanup preview, open logs and data directory |
 
@@ -117,18 +117,22 @@ One executable: no arguments opens the UI, a subcommand runs the CLI. Full argum
 
 ## What a report looks like
 
-Not a log of "apps I used today", but a retrospective in chronological order:
+Not a log of "apps I used today", but a retrospective that leads with conclusions and keeps the evidence one click away. Top to bottom:
 
 | Section | Answers |
 | --- | --- |
-| Title + opening | What kind of day this was, in one or two sentences |
-| Narrative | In time order, each paragraph starting with a time: what you were doing, how far it got, what blocked it |
-| Behavior timeline | `09:12–10:06 · 55 min · idempotency check for the report pipeline`, one line per segment, colored by behavior |
-| Key progress | What got done + evidence (files, commands, error strings) + impact |
+| Header | Which day, which revision, coverage until when, and one sentence on the most substantial thing that happened |
+| Today's outcomes | 3–5 status cards: **status \| result \| why it matters \| next step**. Status is one of done / advanced / waiting on others / unresolved |
+| Follow-ups and blockers | What is not finished and actually needs action: waiting on someone, stuck, or your own next step |
+| Work mainline | `09:45–11:43 · 117 min · started capture and went through the handover material → what it produced`, 4–6 segments, no window-switch logs |
+| Time split | One bar merged by mainline, category shares, rhythm metrics (longest focus, interruptions, fragments) |
 | Blockers and cost | Where it stuck, why, how long it took, how it was handled |
 | Insights | Observation + evidence (citing local statistics) + what to do differently |
+| Evidence and appendix | Collapsed by default: raw blocks, original strip, all documents, full narrative, data gaps and generation info |
 
 Behavior types come from a fixed vocabulary: coding, debugging, verifying, designing, researching, writing docs, meetings, communication, environment wrangling, chores, away. This is separate from app categories — inside the same editor, writing a feature and chasing an error are two different behaviors.
+
+The mainline is merged locally (same verb, gap under 25 minutes, segment under 150 minutes); timestamps always come from local data, and the model only names each segment and writes its result. Lock-screen and away segments never enter the mainline — the appendix just says how many were skipped.
 
 ## Data and privacy
 

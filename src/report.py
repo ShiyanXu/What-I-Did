@@ -106,12 +106,20 @@ def _coverage(day: str, now, cutoff_hour: int) -> dict:
     ws, we = timeutil.day_window(day, cutoff_hour)
     until = min(now, we)
     complete = now >= we
+    # 次日凌晨才出的终版，覆盖到 03:01 属于正常收尾：页面不能再写"当日未结束"
+    settled = complete or now.date() > timeutil.parse_day(day).date()
     if complete:
         window_label = f"{ws:%m-%d %H:%M} – 次日 {we:%H:%M}"
         until_label = "完整一天"
+        note = "完整一天"
+    elif settled:
+        window_label = f"{ws:%H:%M} – {until:%H:%M}"
+        until_label = until.strftime("%H:%M")
+        note = f"已收尾 · 覆盖到 {until:%H:%M}"
     else:
         window_label = f"{ws:%H:%M} – {until:%H:%M}"
         until_label = until.strftime("%H:%M")
+        note = f"截至 {until:%H:%M} · 当天还没结束"
     return {
         "start": ws.strftime("%H:%M"),
         "end": we.strftime("%H:%M"),
@@ -121,6 +129,8 @@ def _coverage(day: str, now, cutoff_hour: int) -> dict:
         "start_iso": timeutil.iso(ws),
         "end_iso": timeutil.iso(we),
         "complete": complete,
+        "settled": settled,
+        "note": note,
         "_until_dt": until,
         "_start_dt": ws,
         "_end_dt": we,
@@ -166,6 +176,7 @@ def _degraded_report(blocks, stats, reason_text: str, sessions=None) -> dict:
         "summary_md": summary,
         "behaviors": behaviors,
         "highlights": [],
+        "followups": [],
         "friction": [],
         "insight": [],
         "timeline": tl,

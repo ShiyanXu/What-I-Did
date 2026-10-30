@@ -15,7 +15,7 @@ _TIME = re.compile(r"^\d{1,2}:\d{2}$")
 
 _LIST_FIELDS = ["timeline", "accomplishments", "in_progress", "blockers", "decisions",
                 "learnings", "tomorrow", "time_breakdown", "apps", "entities", "references",
-                "behaviors", "highlights", "friction", "insight"]
+                "behaviors", "highlights", "followups", "friction", "insight"]
 
 
 def _as_list(v) -> list:
@@ -84,7 +84,7 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
     else:
         out["behaviors"] = [it for it in raw_beh if isinstance(it, dict)]
 
-    # ---- 关键进展（兼容旧字段 accomplishments）
+    # ---- 成果（兼容旧字段 accomplishments）
     highlights = []
     for it in _as_list(data.get("highlights")):
         if not isinstance(it, dict):
@@ -96,10 +96,16 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
         dropped_ids += d
         if not bids:
             issues.append(f"highlights「{what[:24]}…」未关联 block_ids，结论缺少证据回链")
+        impact = str(it.get("impact") or "")[:200]
+        nxt = str(it.get("next") or "")[:200]
         highlights.append({
             "what": what[:200],
             "evidence": str(it.get("evidence") or "")[:240],
-            "impact": str(it.get("impact") or "")[:200],
+            "impact": impact,
+            # 状态和下一步是首屏成果卡的全部信息量：模型没给就按文字判一次，
+            # 判定函数只有 behavior.outcome_status 一处，页面展示时不会再改口径。
+            "status": behavior_mod.outcome_status(it.get("status"), what, impact, nxt),
+            "next": nxt,
             "block_ids": bids,
         })
     if not highlights:
@@ -108,13 +114,39 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
                 continue
             art = it.get("artifact")
             claim = art.get("label") if isinstance(art, dict) else (art if isinstance(art, str) else "")
+            what = str(it["what"])[:200]
+            impact = str(it.get("impact") or "")[:200]
             highlights.append({
-                "what": str(it["what"])[:200],
+                "what": what,
                 "evidence": str(claim or "")[:240],
-                "impact": str(it.get("impact") or "")[:200],
+                "impact": impact,
+                "status": behavior_mod.outcome_status(it.get("status"), what, impact),
+                "next": str(it.get("next") or "")[:200],
                 "block_ids": _filter_ids(it.get("block_ids"), block_ids)[0],
             })
     out["highlights"] = highlights
+
+    # ---- 待办与卡点：首屏第二块内容，只留"还需要动"的事
+    followups = []
+    for it in _as_list(data.get("followups")):
+        if not isinstance(it, dict):
+            continue
+        item = str(it.get("item") or "").strip()
+        if not item:
+            continue
+        kind = str(it.get("kind") or "").strip().lower()
+        if kind not in ("waiting", "blocked", "todo"):
+            st = behavior_mod.outcome_status(it.get("status"), item, it.get("why"))
+            kind = {"waiting": "waiting", "blocked": "blocked", "unresolved": "blocked"}.get(st, "todo")
+        bids, d = _filter_ids(it.get("block_ids"), block_ids)
+        dropped_ids += d
+        followups.append({
+            "item": item[:200],
+            "kind": kind,
+            "why": str(it.get("why") or it.get("basis") or "")[:200],
+            "block_ids": bids,
+        })
+    out["followups"] = followups
 
     # ---- 卡点（带代价）
     friction = []
@@ -341,6 +373,7 @@ def empty_report(reason: str) -> dict:
         "summary_md": "",
         "behaviors": [],
         "highlights": [],
+        "followups": [],
         "friction": [],
         "insight": [],
         "timeline": [],

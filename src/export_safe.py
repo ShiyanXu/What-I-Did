@@ -87,14 +87,46 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
         lines.append(f"**{_clean(rep['headline'])}**")
         lines.append("")
 
-    if rep.get("opening_md"):
-        lines.append(_clean(rep["opening_md"]))
+    try:
+        import render as render_mod
+
+        rv = render_mod.reading_view(data)
+    except Exception:                      # 渲染层出问题也不能让导出失败
+        rv = {"cards": [], "todos": [], "tasks": [], "tomorrow_extra": [], "gaps": {"inside": []}}
+
+    cards = rv.get("cards") or []
+    if cards:
+        lines.append("## 今日成果")
+        lines.append("")
+        for c in cards:
+            lines.append(f"- **【{c.get('status_label', '已推进')}】{_clean(c.get('what'))}**")
+            if c.get("impact"):
+                lines.append(f"  - 意义：{_clean(c['impact'])}")
+            if c.get("next"):
+                lines.append(f"  - 下一步：{_clean(c['next'])}")
+            if include_evidence and c.get("evidence"):
+                lines.append(f"  - 依据：{_clean(c['evidence'])}")
         lines.append("")
 
-    if rep.get("summary_md"):
-        lines.append("## 过程")
+    todos = rv.get("todos") or []
+    if todos:
+        lines.append("## 待办与卡点")
         lines.append("")
-        lines.append(_clean(rep["summary_md"]))
+        kind_label = {"waiting": "待外部", "blocked": "卡点", "todo": "待办"}
+        for t in todos:
+            why = f"　— {_clean(t.get('why'))}" if t.get("why") else ""
+            lines.append(f"- 【{kind_label.get(t.get('kind'), '待办')}】{_clean(t.get('item'))}{why}")
+        lines.append("")
+
+    tasks = rv.get("tasks") or []
+    if tasks:
+        lines.append("## 工作主线")
+        lines.append("")
+        lines.append("| 时间 | 时长 | 在做什么 | 这段的结果 |")
+        lines.append("|---|---|---|---|")
+        for t in tasks:
+            lines.append(f"| {t.get('start', '')}–{t.get('end', '')} | {t.get('minutes', 0)} 分 | "
+                         f"{_clean(t.get('label'))} | {_clean(t.get('outcome')) or '—'} |")
         lines.append("")
 
     table = _stats_table(stats, labels)
@@ -102,48 +134,6 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
         lines.append("## 时间分布")
         lines.append("")
         lines.extend(table)
-        lines.append("")
-
-    behaviors = [b for b in _items(rep.get("behaviors")) if isinstance(b, dict)]
-    # 过程叙述里通常已经把时间轴讲了一遍；没有叙述时才单独铺行为段，避免同一段内容出现两次
-    if behaviors and not rep.get("summary_md"):
-        lines.append("## 行为时间轴")
-        lines.append("")
-        for it in behaviors:
-            label = _clean(it.get("label"))
-            if not label:
-                continue
-            tail = f"　{_clean(it.get('detail'))}" if _clean(it.get("detail")) else ""
-            lines.append(f"- {it.get('start', '')}–{it.get('end', '')}　{label}{tail}")
-        lines.append("")
-
-    highlights = [h for h in _items(rep.get("highlights")) if isinstance(h, dict)]
-    if highlights:
-        lines.append("## 关键进展")
-        lines.append("")
-        for it in highlights:
-            what = _clean(it.get("what"))
-            if not what:
-                continue
-            lines.append(f"- {what}")
-            if it.get("impact"):
-                lines.append(f"  - 影响：{_clean(it['impact'])}")
-            if include_evidence and it.get("evidence"):
-                lines.append(f"  - 依据：{_clean(it['evidence'])}")
-        lines.append("")
-
-    friction = [f for f in _items(rep.get("friction")) if isinstance(f, dict)]
-    if friction:
-        lines.append("## 卡点")
-        lines.append("")
-        for it in friction:
-            what = _clean(it.get("what"))
-            if not what:
-                continue
-            lines.append(f"- {what}")
-            for label, key in (("原因", "cause"), ("代价", "cost"), ("处理", "fix")):
-                if it.get(key):
-                    lines.append(f"  - {label}：{_clean(it[key])}")
         lines.append("")
 
     insight = [i for i in _items(rep.get("insight")) if isinstance(i, dict)]
@@ -161,9 +151,23 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
                 lines.append(f"  - 下次：{_clean(it['action'])}")
         lines.append("")
 
-    tomorrow = [t for t in _items(rep.get("tomorrow")) if isinstance(t, dict)]
+    friction = [f for f in _items(rep.get("friction")) if isinstance(f, dict)]
+    if friction:
+        lines.append("## 卡点与代价")
+        lines.append("")
+        for it in friction:
+            what = _clean(it.get("what"))
+            if not what:
+                continue
+            lines.append(f"- {what}")
+            for label, key in (("原因", "cause"), ("代价", "cost"), ("处理", "fix")):
+                if it.get(key):
+                    lines.append(f"  - {label}：{_clean(it[key])}")
+        lines.append("")
+
+    tomorrow = [t for t in (rv.get("tomorrow_extra") or []) if isinstance(t, dict)]
     if tomorrow:
-        lines.append("## 明日")
+        lines.append("## 明天")
         lines.append("")
         for it in tomorrow:
             item = _clean(it.get("item"))
@@ -173,6 +177,16 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
             when = f"　{_clean(it.get('when'))}" if it.get("when") else ""
             lines.append(f"- {item}{why}{when}")
         lines.append("")
+
+    if rep.get("opening_md") or rep.get("summary_md"):
+        lines.append("## 过程")
+        lines.append("")
+        if rep.get("opening_md"):
+            lines.append(_clean(rep["opening_md"]))
+            lines.append("")
+        if rep.get("summary_md"):
+            lines.append(_clean(rep["summary_md"]))
+            lines.append("")
 
     refs = [r for r in _items(data.get("refs")) if isinstance(r, dict)]
     public_refs = [r for r in refs if _SAFE_URL.match(str(r.get("uri") or ""))]

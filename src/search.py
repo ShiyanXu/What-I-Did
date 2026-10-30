@@ -6,7 +6,7 @@
 数据来源：
 - `data/<day>/events.jsonl` 的窗口标题与应用名
 - `data/<day>/ocr.jsonl` 的脱敏文字
-- `reports/<day>.json` 的日报叙述、关键进展、卡点、洞察
+- `reports/<day>.json` 的日报叙述、成果、待办、卡点、洞察
 
 关键词按空格/逗号切分，多个关键词取"全部命中"（AND），大小写不敏感。
 """
@@ -161,8 +161,8 @@ def _report_blobs(data: dict) -> list[tuple[str, str]]:
         val = rep.get(key)
         if isinstance(val, str) and val:
             out.append((label, val))
-    for key, label in (("highlights", "关键进展"), ("friction", "卡点"),
-                       ("insight", "洞察"), ("tomorrow", "明日")):
+    for key, label in (("highlights", "成果"), ("followups", "待办"),
+                       ("friction", "卡点"), ("insight", "洞察"), ("tomorrow", "明日")):
         for it in rep.get(key) or []:
             if isinstance(it, dict):
                 text = " ".join(str(v) for v in it.values() if isinstance(v, (str, int, float)))

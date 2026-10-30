@@ -223,7 +223,7 @@ def render_md(data: dict, cat_label: dict | None = None) -> str:
 
     # ---- 进展 / 卡点
     for title, items, hint in (
-        ("关键进展", data["highlights"], "全部摘自当天日报，未逐条复核"),
+        ("今日成果", data["highlights"], "全部摘自当天日报，未逐条复核"),
         ("反复出现的卡点", data["friction"], "出现两次以上才值得改流程"),
         ("未完成，下周继续", data["pending"], "来自日报里的进行中与卡住项"),
         ("下周可以安排", data["tomorrow"], "来自每天给的明日建议，已去重"),

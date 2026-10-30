@@ -32,7 +32,7 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.0"
+VERSION = "1.1"
 TITLE = "What-IDid · 工作记录"
 
 # 托盘菜单命令号（任意唯一整数即可）
@@ -1110,20 +1110,60 @@ class ReportsPage(tk.Frame):
                              ("p", "muted"))
             first = False
 
-        if rep.get("opening_md"):
-            self._write_md(rep["opening_md"])
-            self.text.insert("end", "\n", ("p",))
+        try:
+            import render as render_mod
 
-        if rep.get("summary_md"):
-            self._section("过程", first)
-            first = False
-            self._write_md(rep["summary_md"])
+            rv = render_mod.reading_view(d)
+        except Exception:
+            rv = {"cards": [], "todos": [], "tasks": [], "metrics": []}
 
-        beh = rep.get("behaviors") or []
-        if beh:
-            self._section("行为时间轴", first)
+        # 页面顺序：成果 → 待办 → 主线 → … → 过程。读者先要知道"做成了什么"，
+        # 而不是"我打开过哪些窗口"。与 web/day 页面、Markdown 归档保持同一套顺序。
+        cards = rv.get("cards") or []
+        if cards:
+            self._section("今日成果", first)
             first = False
-            self._write_behaviors(beh)
+            for c in cards:
+                self.text.insert("end", f"【{c.get('status_label', '')}】", ("bullet", "muted"))
+                self._write_inline(c.get("what", ""), "bullet")
+                self.text.insert("end", "\n", ("bullet",))
+                for label, key in (("意义", "impact"), ("下一步", "next"), ("证据", "evidence")):
+                    self._write_sub(label, c.get(key, ""))
+
+        todos = rv.get("todos") or []
+        if todos:
+            self._section("待办与卡点", first)
+            first = False
+            kind_label = {"waiting": "待外部", "blocked": "卡点", "todo": "待办"}
+            for t in todos:
+                self.text.insert("end", f"【{kind_label.get(t.get('kind'), '待办')}】", ("bullet", "muted"))
+                self._write_inline(t.get("item", ""), "bullet")
+                self.text.insert("end", "\n", ("bullet",))
+                self._write_sub("为什么", t.get("why", ""))
+
+        tasks = rv.get("tasks") or []
+        if tasks:
+            self._section("工作主线", first)
+            first = False
+            tnotes = rv.get("task_notes") or {}
+            for t in tasks:
+                self.text.insert("end", f"{t.get('start', '')}–{t.get('end', '')}  ", ("time",))
+                self._write_inline(t.get("label", ""), "behlabel")
+                self.text.insert("end", f"　{t.get('minutes', 0)} 分\n", ("behlabel", "muted"))
+                self._write_sub("结果", t.get("outcome", ""))
+            if tnotes.get("merged"):
+                self.text.insert("end", f"（已把 {tnotes['merged']} 个短切换并入所属主线，"
+                                        f"逐段明细见下方行为时间轴）\n", ("p", "muted"))
+
+        cats = (d.get("stats") or {}).get("by_category") or {}
+        if cats:
+            self._section("时间分配", first)
+            first = False
+            parts = [f"{CAT_LABEL.get(k, k)} {float(v):.0f} 分" for k, v in cats.items()]
+            rhythm = (d.get("stats") or {}).get("rhythm") or {}
+            if rhythm.get("longest_focus_min"):
+                parts.append(f"最长专注 {rhythm['longest_focus_min']} 分（{rhythm.get('longest_focus_at', '')}）")
+            self.text.insert("end", "　·　".join(parts) + "\n", ("p", "muted"))
 
         offline = rep.get("offline") or []
         if offline:
@@ -1138,38 +1178,6 @@ class ReportsPage(tk.Frame):
                 if o.get("note"):
                     self.text.insert("end", str(o["note"]), ("sub",))
                     self.text.insert("end", "\n", ("sub",))
-
-        hi = rep.get("highlights") or []
-        if hi:
-            self._section("关键进展", first)
-            first = False
-            for it in hi:
-                self.text.insert("end", "•  ", ("bullet",))
-                self._write_inline(it.get("what", ""), "bullet")
-                self.text.insert("end", "\n", ("bullet",))
-                self._write_sub("证据", it.get("evidence", ""))
-                self._write_sub("影响", it.get("impact", ""))
-
-        acc = rep.get("accomplishments") or []
-        if acc and not hi:
-            self._section("成果", first)
-            first = False
-            for a in acc:
-                if isinstance(a, str):
-                    a = {"what": a}
-                self.text.insert("end", "•  ", ("bullet",))
-                self._write_inline(a.get("what", ""), "bullet")
-                extra = []
-                if a.get("status"):
-                    extra.append(str(a["status"]))
-                art = a.get("artifact")
-                if isinstance(art, dict) and art.get("label"):
-                    extra.append(str(art["label"]))
-                elif isinstance(art, str) and art:
-                    extra.append(art)
-                if extra:
-                    self.text.insert("end", "  （" + " · ".join(extra) + "）", ("bullet", "muted"))
-                self.text.insert("end", "\n", ("bullet",))
 
         fr = rep.get("friction") or []
         if fr:
@@ -1209,6 +1217,21 @@ class ReportsPage(tk.Frame):
                 self._write_inline(str(text), "bullet")
                 self.text.insert("end", "\n", ("bullet",))
 
+        if rep.get("opening_md") or rep.get("summary_md"):
+            self._section("过程", first)
+            first = False
+            if rep.get("opening_md"):
+                self._write_md(rep["opening_md"])
+                self.text.insert("end", "\n", ("p",))
+            if rep.get("summary_md"):
+                self._write_md(rep["summary_md"])
+
+        beh = rep.get("behaviors") or []
+        if beh:
+            self._section("行为时间轴（逐段明细）", first)
+            first = False
+            self._write_behaviors(beh)
+
         tl = rep.get("timeline") or []
         if tl:
             self._section("时间线", first)
@@ -1246,12 +1269,13 @@ class ReportsPage(tk.Frame):
                     self.text.insert("end", f"　·　{r['why']}", ("p", "muted"))
                 self.text.insert("end", "\n", ("p",))
 
-        gaps = d.get("gaps") or []
+        gaps = (rv.get("gaps") or {}).get("inside") or []
         if gaps:
-            self._section("数据缺口", first)
+            self._section("记录中断", first)
             first = False
             for g in gaps:
-                self.text.insert("end", f"•  {g.get('start', '')} – {g.get('end', '')}　{g.get('minutes', '')} 分钟没有记录\n",
+                self.text.insert("end", f"•  {g.get('start', '')} – {g.get('end', '')}　"
+                                        f"{g.get('minutes', '')} 分钟没有记录（多半是离开、会议或休息）\n",
                                  ("bullet", "muted"))
 
         meta = d.get("meta") or {}
