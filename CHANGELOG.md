@@ -21,7 +21,42 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
-## [v1.2] - 2026-11-03
+## [v1.2.1] - 2026-11-02
+
+### English
+
+Fix a language switch that only half worked: the page you were looking at turned Chinese,
+the sidebar stayed English.
+
+#### Fixed
+
+- **The sidebar menu now follows the language.** It was built once when the module was
+  imported, and switching the language rebuilds the window inside the same process without
+  re-importing anything, so the four labels kept the language they were first built in.
+  They are now computed every time the window is built.
+- **Category labels and the colour legend follow too.** The time-split line
+  (`Meetings 138 min`) and the legend under the timeline (`Coding / Debug / …`) had the
+  same problem, and the legend also showed the raw English verb names in Chinese mode.
+- **The reports empty-state hint** (`Pick a report on the left…`) was frozen the same way.
+
+No behaviour change otherwise: the same data, the same layout, only the strings that were
+one language behind now match the rest of the window.
+
+### 中文
+
+修一个「只切了一半」的语言问题：正在看的页面变成中文了，左侧菜单还是英文。
+
+#### 修复
+
+- **左侧菜单跟着语言走**：它是在模块导入时算好的一串常量，而切换语言是**同一个进程内**
+  重建窗口、不会重新导入模块，于是四个标签停在第一次构建时的语言。现在每次建窗口时现算。
+- **分类名与色带图例同样修好**：时间分配那行（`Meetings 138 min`）和时间轴下方的图例
+  （`Coding / Debug / …`）是同一个成因；图例此前在中文界面下还会直接显示英文动词原名。
+- **日报页的空状态提示**（`Pick a report on the left…`）也一起修了，同样是导入时固化。
+
+其余行为不变：数据、布局、交互都相同，只有落后一个语言的那些文案现在跟窗口一致了。
+
+## [v1.2] - 2026-11-02
 
 ### English
 

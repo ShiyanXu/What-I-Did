@@ -34,7 +34,7 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.2"
+VERSION = "1.2.1"
 TITLE = t("What-IDid · Work Log")
 
 # 托盘菜单命令号（任意唯一整数即可）
@@ -64,11 +64,27 @@ CAT_COLOR = {          # 与 src/render.py 的 CAT_COLOR 保持一致
     "dev": "#2563eb", "doc": "#0d9488", "meet": "#d97706",
     "comm": "#7c3aed", "web": "#64748b", "other": "#94a3b8",
 }
-CAT_LABEL = {"dev": t("Dev"), "doc": t("Docs"), "meet": t("Meetings"), "comm": t("Comms"), "web": t("Browsing"), "other": t("Other")}
+CAT_LABEL = {"dev": "Dev", "doc": "Docs", "meet": "Meetings", "comm": "Comms", "web": "Browsing", "other": "Other"}
+
+
+def cat_label(key: str) -> str:
+    """分类的显示名。
+
+    这里存的是**英文源**，翻译在调用时现算。不能像以前那样写成 `t("Dev")`：
+    模块级常量在 import 时求值，而切换语言是进程内重建窗口（`gui.main()` 的 while
+    循环），模块不会重新导入，那些常量就永远停在首次导入的语言上。
+    """
+    return t(CAT_LABEL.get(key, key))
+
 
 # 行为动词（与 src/behavior.py 的 VERBS 同源，这里只做展示用）
 VERB_LABEL = {k: v["label"] for k, v in behavior_mod.VERBS.items()}
 VERB_COLOR = {k: v["color"] for k, v in behavior_mod.VERBS.items()}
+
+
+def verb_label(key: str) -> str:
+    """动词显示名，理由同 `cat_label()`：英文源 + 调用时翻译。"""
+    return t(VERB_LABEL.get(key, key))
 
 S = 1.0                 # DPI 缩放系数，App 创建后设置
 FONT = "Microsoft YaHei UI"
@@ -175,7 +191,7 @@ def segments_from_blocks(blocks: list[dict]) -> list[dict]:
         segs.append({
             "s": sm, "e": em,
             "color": CAT_COLOR.get(b.get("category", "other"), CAT_COLOR["other"]),
-            "tip": f"{s}–{e}  {CAT_LABEL.get(b.get('category', ''), '')}  {b.get('title', '')}",
+            "tip": f"{s}–{e}  {cat_label(b.get('category', ''))}  {b.get('title', '')}",
         })
     return segs
 
@@ -465,7 +481,7 @@ class DashPage(tk.Frame):
             dot = tk.Canvas(box, width=px(8), height=px(8), bg=CARD, highlightthickness=0)
             dot.create_rectangle(0, 0, px(8), px(8), fill=VERB_COLOR.get(v, "#94a3b8"), outline="")
             dot.pack(side="left", padx=(0, px(5)))
-            tk.Label(box, text=VERB_LABEL.get(v, v), bg=CARD, fg=MUTED,
+            tk.Label(box, text=verb_label(v), bg=CARD, fg=MUTED,
                      font=(FONT, 8)).pack(side="left")
 
         for w in self.blist.winfo_children():
@@ -877,11 +893,12 @@ class ReportsPage(tk.Frame):
         self.render(day)
 
     # -------------------------------------------------- 详情
-    def show_placeholder(self, msg: str = t("Pick a report on the left,\nor hit \"Generate report now\" to turn today's data into text."),
-                         day: str = ""):
+    def show_placeholder(self, msg: str | None = None, day: str = ""):
+        # 默认值只能在这里取：写成 `msg=t("…")` 就在 import 时固化了语言
         self.date_lbl.configure(text=pretty_date(day) if day else t("No reports yet"))
         self.wd_lbl.configure(text=weekday_short(day) if day else "")
-        self.headline.configure(text=msg)
+        self.headline.configure(text=msg or t("Pick a report on the left,"
+                                              "\nor hit \"Generate report now\" to turn today's data into text."))
         for w in self.badge_box.winfo_children():
             w.destroy()
         for w in self.chips.winfo_children():
@@ -1180,7 +1197,7 @@ class ReportsPage(tk.Frame):
         if cats:
             self._section(t("Time split"), first)
             first = False
-            parts = [t("{cat} {n:.0f} min", cat=CAT_LABEL.get(k, k), n=float(v)) for k, v in cats.items()]
+            parts = [t("{cat} {n:.0f} min", cat=cat_label(k), n=float(v)) for k, v in cats.items()]
             rhythm = (d.get("stats") or {}).get("rhythm") or {}
             if rhythm.get("longest_focus_min"):
                 parts.append(t("Longest focus {m} min ({at})",
@@ -1265,7 +1282,7 @@ class ReportsPage(tk.Frame):
                 end = str(it.get("end", ""))[11:16] or str(it.get("end", ""))
                 self.text.insert("end", f"{start}–{end}  ", ("bullet", "muted"))
                 self._write_inline(f"{it.get('title', '')}", "bullet")
-                self.text.insert("end", f"　{CAT_LABEL.get(it.get('category', ''), '')}\n", ("bullet", "muted"))
+                self.text.insert("end", f"　{cat_label(it.get('category', ''))}\n", ("bullet", "muted"))
 
         refs = d.get("refs") or []
         if refs:
@@ -1908,8 +1925,14 @@ class DiagPage(tk.Frame):
 
 
 # ---------------------------------------------------------------- 主窗口
-NAV = [("dash", t("Overview"), "dash"), ("reports", t("Reports"), "report"),
-       ("settings", t("Settings"), "gear"), ("diag", t("Diagnostics"), "pulse")]
+def nav_items() -> list[tuple[str, str, str]]:
+    """左侧导航项（key, 显示名, 图标）。
+
+    同样是「英文源 + 调用时翻译」：写成模块级列表的话，切语言后菜单会停在旧语言，
+    这正是 v1.2 里报出来的那个 bug（内容页已经是中文，左侧仍是 Overview/Reports）。
+    """
+    return [("dash", t("Overview"), "dash"), ("reports", t("Reports"), "report"),
+            ("settings", t("Settings"), "gear"), ("diag", t("Diagnostics"), "pulse")]
 
 
 class App(tk.Tk):
@@ -2025,7 +2048,7 @@ class App(tk.Tk):
         tk.Label(box, text=t("Automatic work log"), bg=SIDEBAR, fg="#7c8698", font=(FONT, 8)).pack(anchor="w")
 
         self.nav_items = {}
-        for key, label, icon in NAV:
+        for key, label, icon in nav_items():
             item = tk.Frame(side, bg=SIDEBAR, cursor="hand2")
             item.pack(fill="x", padx=px(10), pady=px(2))
             bar = tk.Frame(item, bg=SIDEBAR, width=px(3))
