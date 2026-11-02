@@ -31,6 +31,18 @@ def _load_state(day: str) -> dict:
         return {}
 
 
+def revision_of(day: str) -> int:
+    """那天日报已出到第几版；没有就是 0。
+
+    daemon 的触发配额靠它判断「上一轮到底有没有产出」——rev 涨了说明有进展，
+    连续无进展才应该退避，而不是把一天里正常的增量更新次数也算成失败。
+    """
+    try:
+        return int(_load_state(day).get("revision") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _has_data(day: str) -> bool:
     p = paths.events_path(day)
     try:

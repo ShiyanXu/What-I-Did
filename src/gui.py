@@ -32,7 +32,7 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.1"
+VERSION = "1.1.2"
 TITLE = "What-IDid · 工作记录"
 
 # 托盘菜单命令号（任意唯一整数即可）

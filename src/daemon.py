@@ -89,19 +89,35 @@ def _run_tick_inline(log) -> None:
     threading.Thread(target=work, name="tick-inline", daemon=True).start()
 
 
-def _guard_allows(day: str, log) -> bool:
-    """同一天别刷太频繁：5 分钟起步翻倍，最多 6 次；新进程重置一次机会。"""
+def _guard_allows(day: str, why: str, log) -> bool:
+    """同一天别刷太频繁：5 分钟起步翻倍，最多 6 次；有新版产出就重新计数。
+
+    计的是「连续无进展的尝试」：`state` 里的 revision 一旦上涨，说明上一轮真出了
+    新版，配额归零。旧实现只看拉起次数，21:00 起每 90 分钟一版增量正好 6 次，
+    到 04:00 补终版时配额已耗尽，一次失手就整天不再重试（2026-11-01 即此）。
+
+    终版额外开一道口子：它是唯一要交付的版本，配额用完后仍按 1 小时退避继续试，
+    宁可多试几次也不能整天缺终版。
+    """
     g = _load_guard()
     if g.get("boot") != BOOT_ID:
         g = {"boot": BOOT_ID, "days": {}}
     days = g.setdefault("days", {})
-    rec = days.setdefault(day, {"attempts": 0, "ts": 0})
-    if int(rec.get("attempts", 0)) >= MAX_ATTEMPTS:
+    rec = days.setdefault(day, {"attempts": 0, "ts": 0, "rev": 0})
+
+    rev = tick_mod.revision_of(day)
+    if rev > int(rec.get("rev", 0)):
+        rec["attempts"] = 0
+        rec["rev"] = rev
+
+    attempts = int(rec.get("attempts", 0))
+    if attempts >= MAX_ATTEMPTS and why != "补终版":
         return False
-    wait = min(3600, 300 * (2 ** min(int(rec.get("attempts", 0)), 3)))
+
+    wait = min(3600, 300 * (2 ** min(attempts, 3)))
     if time.time() - float(rec.get("ts", 0)) < wait:
         return False
-    rec["attempts"] = int(rec.get("attempts", 0)) + 1
+    rec["attempts"] = attempts + 1
     rec["ts"] = time.time()
     # 只留最近 14 天，防止文件无限长
     cutoff = timeutil.workday_of(timeutil.now(), 4)
@@ -126,13 +142,15 @@ def _check_report_trigger(cfg, log) -> None:
     if not due:
         return
 
-    day, why = due[0]
-    if not _guard_allows(day, log):
+    # 逐个看：最新那天的配额用完时，别把后面还在等的老日子一起饿死
+    for day, why in due:
+        if not _guard_allows(day, why, log):
+            continue
+        if log:
+            log.info("到点出报：%s（%s）", day, why)
+        if not _spawn_tick(log):
+            _run_tick_inline(log)
         return
-    if log:
-        log.info("到点出报：%s（%s）", day, why)
-    if not _spawn_tick(log):
-        _run_tick_inline(log)
 
 
 def run(cfg, log) -> int:
@@ -186,8 +204,10 @@ def run(cfg, log) -> int:
                 if now - last_bg >= 30:
                     last_bg = now
                     try:
-                        _check_report_trigger(cfg, log)
+                        # 先清理再出报：两者共用 WhatIDid.Report 锁，反过来的话
+                        # 刚拉起的 tick 会在启动的 1 秒里撞上清理，直接躺平成 busy。
                         retention.maybe_clean(cfg, log, CLEAN_STATE)
+                        _check_report_trigger(cfg, log)
                     except Exception as exc:
                         log.warning("后台任务异常: %s", exc)
                 time.sleep(1)

@@ -22,6 +22,11 @@ from locking import SingleInstance
 
 REPORT_STATUS = ("ok", "degraded", "empty")
 
+# 出报前最多等这么久拿「正在写日报」的锁。清理任务（retention）与出报共用这把锁，
+# 而两者会在 daemon 的同一个轮次里前后脚启动，撞上就是 1 秒级的错位；
+# 等一会儿既能避开，又不会在真的有人出报时干等太久。
+LOCK_WAIT_SEC = 10.0
+
 
 def _load_state(day: str) -> dict:
     p = paths.day_state(day)
@@ -205,10 +210,10 @@ def generate(day: str, cfg, log, reason: str = "manual", force: bool = False,
     cfg = privacy.current_config(cfg)
     privacy.require_valid(cfg)
     paths.ensure_dirs()
-    with SingleInstance("WhatIDid.Report") as lock:
+    with SingleInstance("WhatIDid.Report", wait=LOCK_WAIT_SEC) as lock:
         if not lock.acquired:
             if log:
-                log.info("已有报表进程在跑，本次跳过")
+                log.info("已有报表进程在跑，等了 %.0fs 仍未释放，本次跳过", LOCK_WAIT_SEC)
             return {"status": "busy", "day": day}
         return _generate_locked(day, cfg, log, reason, force, open_browser, approved)
 

@@ -1,8 +1,10 @@
 """免管理员权限的自启动 + 出报定时任务。
 
 三条路，优先计划任务：
-1. 用户级计划任务（`schtasks /create` 不带 /RL HIGHEST）：普通账户即可建，
-   支持"登录即启 + 隐藏窗口 + 崩溃重启 + 不限执行时长"，是最稳的形态。
+1. 用户级计划任务：普通账户即可建，支持"登录即启 + 隐藏窗口 + 崩溃重启 +
+   不限执行时长"，是最稳的形态。**注册有两条路**——优先 ScheduledTasks 模块的
+   `Register-ScheduledTask`（只走 RPC），失败再退回 `schtasks /create`；有些安全
+   策略把 `schtasks.exe` 直接列进程序黑名单，连执行都不给，此时只有前者能用。
 2. 注册表 `HKCU\\...\\Run`：计划任务被安全软件拦掉时的兜底。
    缺点是无法崩溃重启。
 3. 出报另有独立任务 `WhatIDid-Report`：每天 21:00 起每 20 分钟跑一次 tick（幂等），
@@ -177,7 +179,76 @@ def _report_task_xml(cfg=None) -> str:
     )
 
 
+def _run_ps(script: str, timeout: int = 30):
+    """跑一段 PowerShell（-EncodedCommand，免得跟引号/中文打架）。"""
+    import base64
+
+    body = "[Console]::OutputEncoding=[Text.Encoding]::UTF8;" + script
+    enc = base64.b64encode(body.encode("utf-16-le")).decode("ascii")
+    return subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive",
+         "-ExecutionPolicy", "Bypass", "-EncodedCommand", enc],
+        capture_output=True, text=True, timeout=timeout,
+        encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
+    )
+
+
+def _ps_error(r) -> str:
+    return ((r.stderr or "") + (r.stdout or "")).strip() or "PowerShell 调用失败"
+
+
+def _create_task_ps(name: str, xml: str) -> str:
+    """走 ScheduledTasks 模块。`schtasks.exe` 会被部分安全策略直接拦掉（连执行都不给），
+    而 `Register-ScheduledTask` 是 cmdlet，只走 RPC，通常还活着。"""
+    import tempfile as _tf
+
+    tmp = Path(_tf.gettempdir()) / f"whatidid_{name}.xml"
+    tmp.write_text(xml, encoding="utf-16")
+    path = str(tmp).replace("'", "''")
+    try:
+        r = _run_ps(
+            "$ErrorActionPreference='Stop';"
+            f"$x=Get-Content -Raw -LiteralPath '{path}';"
+            # 声明里的 encoding 跟字符串形式不匹配，注册前去掉
+            "$x=$x -replace '^\\s*<\\?xml[^>]*\\?>','';"
+            f"Register-ScheduledTask -TaskName '{name}' -Xml $x -Force | Out-Null;"
+            "'OK'"
+        )
+    finally:
+        tmp.unlink(missing_ok=True)
+    if r.returncode != 0 or "OK" not in (r.stdout or ""):
+        raise RuntimeError(_ps_error(r)[:300])
+    return name
+
+
+def _delete_task_ps(name: str) -> str:
+    r = _run_ps(
+        "$ErrorActionPreference='Stop';"
+        f"Unregister-ScheduledTask -TaskName '{name}' -Confirm:$false;"
+        "'OK'"
+    )
+    if r.returncode != 0 or "OK" not in (r.stdout or ""):
+        raise RuntimeError(_ps_error(r)[:300])
+    return name
+
+
+def _task_exists_ps(name: str) -> bool:
+    r = _run_ps(
+        f"if (Get-ScheduledTask -TaskName '{name}' -ErrorAction SilentlyContinue) {{'YES'}} else {{'NO'}}",
+        timeout=20,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(_ps_error(r)[:200])
+    return "YES" in (r.stdout or "")
+
+
 def _create_task(name: str, xml: str) -> str:
+    """两条路都试：先 cmdlet（能绕开 schtasks 黑名单），失败再退回 schtasks。"""
+    errors = []
+    try:
+        return _create_task_ps(name, xml)
+    except Exception as exc:
+        errors.append(f"Register-ScheduledTask: {exc}")
     tmp = Path(tempfile.gettempdir()) / f"whatidid_{name}.xml"
     # schtasks 要求 UTF-16 编码的 XML
     tmp.write_text(xml, encoding="utf-16")
@@ -187,30 +258,52 @@ def _create_task(name: str, xml: str) -> str:
             capture_output=True, text=True, timeout=30,
             encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
         )
+    except OSError as exc:
+        # 安全策略把 schtasks.exe 列进黑名单时，连进程都起不来
+        errors.append(f"schtasks: {exc}")
+        raise RuntimeError("；".join(errors)[:400]) from exc
     finally:
         tmp.unlink(missing_ok=True)
     if r.returncode != 0:
-        raise RuntimeError((r.stderr or r.stdout or "schtasks 创建失败").strip())
+        errors.append(f"schtasks: {(r.stderr or r.stdout or '创建失败').strip()}")
+        raise RuntimeError("；".join(errors)[:400])
     return name
 
 
 def _delete_task(name: str) -> str:
-    r = subprocess.run(
-        ["schtasks", "/Delete", "/TN", name, "/F"],
-        capture_output=True, text=True, timeout=20,
-        encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
-    )
+    try:
+        return _delete_task_ps(name)
+    except Exception as exc:
+        first = str(exc)
+    try:
+        r = subprocess.run(
+            ["schtasks", "/Delete", "/TN", name, "/F"],
+            capture_output=True, text=True, timeout=20,
+            encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Register-ScheduledTask: {first}；schtasks: {exc}"[:400]) from exc
     if r.returncode != 0:
-        raise RuntimeError((r.stderr or r.stdout or "schtasks 删除失败").strip())
+        raise RuntimeError(
+            f"Register-ScheduledTask: {first}；schtasks: "
+            f"{(r.stderr or r.stdout or '删除失败').strip()}"[:400])
     return name
 
 
 def task_exists(name: str = TASK_NAME) -> bool:
-    r = subprocess.run(
-        ["schtasks", "/Query", "/TN", name],
-        capture_output=True, text=True, timeout=10,
-        encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
-    )
+    try:
+        return _task_exists_ps(name)
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(
+            ["schtasks", "/Query", "/TN", name],
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="ignore", creationflags=CREATE_NO_WINDOW,
+        )
+    except OSError:
+        return False
     return r.returncode == 0
 
 
