@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from i18n import t, tn
+
 import re
 
 import behavior as behavior_mod
@@ -53,14 +55,14 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
 
     headline = str(data.get("headline") or "").strip()
     if not headline:
-        issues.append("headline 为空")
+        issues.append(t("headline is empty"))
     out["headline"] = headline[:80]
 
     out["opening_md"] = str(data.get("opening_md") or "").strip()[:900]
 
     summary = str(data.get("summary_md") or "").strip()
     if not summary:
-        issues.append("summary_md 为空")
+        issues.append(t("summary_md is empty"))
     out["summary_md"] = summary
 
     dropped_ids = 0
@@ -79,7 +81,9 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
                 continue
             picked.append(it)
         if unknown:
-            issues.append(f"剔除了 {unknown} 个不存在的 seg_id")
+            issues.append(tn(unknown,
+                             "Dropped {n} behavior segment with an unknown seg_id",
+                             "Dropped {n} behavior segments with an unknown seg_id"))
         out["behaviors"] = behavior_mod.merge(picked, sessions)
     else:
         out["behaviors"] = [it for it in raw_beh if isinstance(it, dict)]
@@ -95,7 +99,8 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
         bids, d = _filter_ids(it.get("block_ids"), block_ids)
         dropped_ids += d
         if not bids:
-            issues.append(f"highlights「{what[:24]}…」未关联 block_ids，结论缺少证据回链")
+            issues.append(t("Highlight \"{text}…\" has no block_ids; the conclusion has no evidence link",
+                           text=what[:24]))
         impact = str(it.get("impact") or "")[:200]
         nxt = str(it.get("next") or "")[:200]
         highlights.append({
@@ -159,7 +164,8 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
         bids, d = _filter_ids(it.get("block_ids"), block_ids)
         dropped_ids += d
         if not bids:
-            issues.append(f"friction「{what[:24]}…」未关联 block_ids，判断缺少证据回链")
+            issues.append(t("Friction \"{text}…\" has no block_ids; the judgement has no evidence link",
+                           text=what[:24]))
         friction.append({
             "what": what[:200],
             "cause": str(it.get("cause") or "")[:200],
@@ -234,7 +240,7 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
             if isinstance(rid, str) and rid in ref_ids:
                 art["ref_id"] = rid
             elif rid:
-                issues.append(f"artifact.ref_id 不存在: {rid}")
+                issues.append(t("artifact.ref_id does not exist: {rid}", rid=rid))
         elif isinstance(artifact, str):
             art["label"] = artifact[:120]
         bids, d = _filter_ids(it.get("block_ids"), block_ids)
@@ -318,7 +324,7 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
             minutes = 0
         if minutes <= 0:
             continue
-        tb.append({"category": str(it.get("category") or "其他")[:20],
+        tb.append({"category": str(it.get("category") or "other")[:20],
                    "minutes": minutes, "note": str(it.get("note") or "")[:120]})
     out["time_breakdown"] = tb
 
@@ -341,7 +347,7 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
         rid = it.get("ref_id")
         if not isinstance(rid, str) or rid not in ref_ids:
             if rid:
-                issues.append(f"references.ref_id 不存在: {rid}")
+                issues.append(t("references.ref_id does not exist: {rid}", rid=rid))
             continue
         refs.append({
             "ref_id": rid,
@@ -361,14 +367,16 @@ def validate_report(data: dict, block_ids: set[str], ref_ids: set[str],
             out[k] = v
 
     if dropped_ids:
-        issues.append(f"剔除了 {dropped_ids} 个不存在的 block_id 引用")
+        issues.append(tn(dropped_ids,
+                         "Dropped {n} block_id reference that does not exist",
+                         "Dropped {n} block_id references that do not exist"))
     return out, issues
 
 
 def empty_report(reason: str) -> dict:
     return {
         "schema_version": 1,
-        "headline": reason or "这一天没有可用记录",
+        "headline": reason or t("No usable records for this day"),
         "opening_md": "",
         "summary_md": "",
         "behaviors": [],

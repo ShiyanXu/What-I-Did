@@ -16,31 +16,32 @@ from datetime import datetime, timedelta
 
 import blocks as blocks_mod
 import timeutil
+from i18n import t, join_list
 
 # 行为动词：描述"在做什么"，不是"用了什么软件"
 VERBS: dict[str, dict] = {
-    "coding":        {"label": "写代码", "color": "#2563eb"},
-    "debugging":     {"label": "排问题", "color": "#dc2626"},
-    "testing":       {"label": "验证", "color": "#0891b2"},
-    "designing":     {"label": "设计", "color": "#7c3aed"},
-    "reading":       {"label": "查资料", "color": "#64748b"},
-    "writing":       {"label": "写文档", "color": "#0d9488"},
-    "meeting":       {"label": "开会", "color": "#d97706"},
-    "communicating": {"label": "沟通", "color": "#be185d"},
-    "operating":     {"label": "折腾环境", "color": "#b45309"},
-    "admin":         {"label": "杂务", "color": "#94a3b8"},
-    "away":          {"label": "离开", "color": "#cbd5e1"},
+    "coding":        {"label": "Coding", "color": "#2563eb"},
+    "debugging":     {"label": "Debugging", "color": "#dc2626"},
+    "testing":       {"label": "Testing", "color": "#0891b2"},
+    "designing":     {"label": "Designing", "color": "#7c3aed"},
+    "reading":       {"label": "Research", "color": "#64748b"},
+    "writing":       {"label": "Writing", "color": "#0d9488"},
+    "meeting":       {"label": "Meetings", "color": "#d97706"},
+    "communicating": {"label": "Comms", "color": "#be185d"},
+    "operating":     {"label": "Environment", "color": "#b45309"},
+    "admin":         {"label": "Admin", "color": "#94a3b8"},
+    "away":          {"label": "Away", "color": "#cbd5e1"},
 }
 VERB_KEYS = tuple(k for k in VERBS if k != "away")
 
 # 成果状态：一张成果卡只回答一件事——这件事到哪一步了。
 # 四类够用：做完了 / 有进展但没完 / 卡在别人手上 / 还没解决。
 OUTCOME_STATUS = {
-    "done": ("已完成", "done"),
-    "advanced": ("已推进", "adv"),
-    "waiting": ("待外部", "wait"),
-    "blocked": ("受阻", "blk"),
-    "unresolved": ("未解决", "open"),
+    "done": ("Done", "done"),
+    "advanced": ("Advanced", "adv"),
+    "waiting": ("Waiting", "wait"),
+    "blocked": ("Blocked", "blk"),
+    "unresolved": ("Unresolved", "open"),
 }
 _STATUS_ALIAS = {
     "done": "done", "complete": "done", "completed": "done", "finished": "done", "ok": "done",
@@ -204,24 +205,24 @@ def guess_verb(sess: Session) -> str:
 def local_fill(sess: Session) -> dict:
     """本地兜底：没有模型时也能看出"这是什么行为"，而不是只显示窗口标题。"""
     verb = guess_verb(sess)
-    verb_label = VERBS[verb]["label"]
+    verb_label = t(VERBS[verb]["label"])
     title = sess.titles[0] if sess.titles else ""
     if title:
         short = re.sub(r"\s+[-—|]\s+.*$", "", title)[:18] or title[:18]
         label = f"{verb_label}·{short}"[:26]
     else:
-        label = f"{verb_label} {sess.minutes} 分钟"
+        label = t("{verb} {n} min", verb=verb_label, n=sess.minutes)
     bits = []
     if title:
-        bits.append(f"窗口停在「{title[:40]}」")
+        bits.append(t("stayed on \"{title}\"", title=title[:40]))
     if len(sess.titles) > 1:
-        bits.append(f"期间换了 {len(sess.titles)} 个页面/文件")
+        bits.append(t("moved through {n} pages/files", n=len(sess.titles)))
     if sess.switches:
-        bits.append(f"窗口切换 {sess.switches} 次")
+        bits.append(t("{n} window switches", n=sess.switches))
     return {
         "verb": verb,
         "label": label,
-        "detail": "，".join(bits)[:120],
+        "detail": join_list(bits)[:120],
         "confidence": "low",
         "source": "local",
     }

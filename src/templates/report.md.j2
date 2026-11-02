@@ -1,125 +1,126 @@
 ---
-title: "{{ day }} 工作日报"
+title: "{{ t("{day} daily report", day=day) }}"
 date: {{ day }}
 type: daily-report
 weekday: {{ weekday }}
 active_minutes: {{ d.stats.active_minutes }}
 blocks: {{ d.stats.block_count }}
-longest_focus_min: {{ d.stats.rhythm.longest_focus_min | default(0) }}
+longest_focus_min: {{ ((d.stats or {}).get('rhythm') or {}).get('longest_focus_min', 0) }}
 status: {{ d.status }}
 confidence: {{ d.report.confidence }}
 tags:
-  - 工作日报
+  - daily-report
   - what-i-did
 ---
 
-# {{ day }} {{ weekday }} · {{ d.report.headline or "工作日报" }}
+# {{ day }} {{ weekday }} · {{ d.report.headline or t("Daily report") }}
 
-> [!summary] 一句话
-> {{ d.report.headline or "（无标题）" }}
+> [!summary] {{ t("One line") }}
+> {{ d.report.headline or t("(untitled)") }}
 
-**覆盖范围** {{ d.coverage.note or d.coverage.window }}　|　**成果** {{ rv.cards | length }} 项　|　**待跟进** {{ rv.todos | length }} 项　|　**有效活动** {{ (d.stats.active_minutes / 60) | round(1) }} 小时　|　**会议** {{ d.stats.by_category.meet | default(0) | round(0) | int }} 分
+**{{ t("Coverage") }}** {{ d.coverage.note or d.coverage.window }} | **{{ t("Outcomes") }}** {{ tn(rv.cards | length, "{n} item", "{n} items") }} | **{{ t("To follow up") }}** {{ tn(rv.todos | length, "{n} item", "{n} items") }} | **{{ t("Active time") }}** {{ t("{h} h", h=(d.stats.active_minutes / 60) | round(1)) }} | **{{ t("Meetings") }}** {{ t("{n} min", n=d.stats.by_category.meet | default(0) | round(0) | int) }}
 {% if rv.cards %}
-## 今日成果
+## {{ t("Outcomes today") }}
 
-{% for c in rv.cards %}- **【{{ c.status_label }}】{{ c.what }}**
-{% if c.impact %}  - 意义：{{ c.impact }}
-{% endif %}{% if c.next %}  - 下一步：{{ c.next }}
-{% endif %}{% if c.evidence %}  - 证据：{{ c.evidence }}
-{% endif %}{% if c.docs %}  - 文档：{% for r in c.docs %}[{{ r.label }}]({{ r.uri }}){{ " " if not loop.last else "" }}{% endfor %}
+{% for c in rv.cards %}- **{{ t("[{status}] {what}", status=c.status_label, what=c.what) }}**
+{% if c.impact %}  - {{ t("Significance: {body}", body=c.impact) }}
+{% endif %}{% if c.next %}  - {{ t("Next: {body}", body=c.next) }}
+{% endif %}{% if c.evidence %}  - {{ t("Evidence: {body}", body=c.evidence) }}
+{% endif %}{% if c.docs %}  - {{ t("Documents:") }} {% for r in c.docs %}[{{ r.label }}]({{ r.uri }}){{ " " if not loop.last else "" }}{% endfor %}{{ "\n" }}
 {% endif %}{% endfor %}
 {% endif %}
 {% if rv.todos %}
-## 待办与卡点
+## {{ t("Open items & blockers") }}
 
-{% for t in rv.todos %}- 【{{ {'waiting':'待外部','blocked':'卡点','todo':'待办'}.get(t.kind, '待办') }}】{{ t.item }}{{ "　— " ~ t.why if t.why else "" }}
+{% for item in rv.todos %}- **{{ {'waiting': t("Waiting on others"), 'blocked': t("Blocked"), 'todo': t("To do")}.get(item.kind, t("To do")) }}** {{ item.item }}{{ " — " ~ item.why if item.why else "" }}
 {% endfor %}
 {% endif %}
 {% if rv.tasks %}
-## 工作主线
+## {{ t("Main threads") }}
 
-> [!info] 由 {{ rv.task_notes.segments }} 个连续工作段按主线合并为 {{ rv.task_notes.tasks }} 段
-{% if rv.task_notes.merged %}> 另有 {{ rv.task_notes.merged }} 个短切换已并入所属主线。
+> [!info] {{ t("{segments} merged by thread into {n} threads", segments=tn(rv.task_notes.segments, "{n} work segment", "{n} work segments"), n=rv.task_notes.tasks) }}
+{% if rv.task_notes.merged %}> {{ tn(rv.task_notes.merged, "{n} short switch was folded into its thread.", "{n} short switches were folded into their threads.") }}
 {% endif %}
-| 时间 | 时长 | 在做什么 | 这段的结果 |
+| {{ t("Time") }} | {{ t("Duration") }} | {{ t("What was happening") }} | {{ t("Outcome") }} |
 |---|---|---|---|
-{% for t in rv.tasks %}| {{ t.start }}–{{ t.end }} | {{ t.minutes }} 分 | **{{ t.label }}**{{ "　" ~ t.detail if t.detail else "" }} | {{ t.outcome or "—" }} |
+{% for task in rv.tasks %}| {{ task.start }}–{{ task.end }} | {{ t("{n} min", n=task.minutes) }} | **{{ task.label }}**{{ " · " ~ task.detail if task.detail else "" }} | {{ task.outcome or "—" }} |
 {% endfor %}
 {% endif %}
-## 时间分配
+## {{ t("Time split") }}
 
-{% for key, minutes in d.stats.by_category.items() %}- {{ cat_label.get(key, key) }} {{ minutes }} 分
+{% for key, minutes in d.stats.by_category.items() %}- {{ cat_label.get(key, key) }} {{ t("{n} min", n=minutes) }}
 {% endfor %}
-{% if d.stats.rhythm and d.stats.rhythm.longest_focus_min %}- 最长专注 {{ d.stats.rhythm.longest_focus_min }} 分钟（{{ d.stats.rhythm.longest_focus_at }}），被打断 {{ d.stats.rhythm.interruptions }} 次，碎片段占 {{ (d.stats.rhythm.fragmented_ratio * 100) | round(0) | int }}%
+{% if d.stats.rhythm and d.stats.rhythm.longest_focus_min %}- {{ t("Longest focus {n} min ({at}), {k} interruptions, {pct}% fragmented", n=d.stats.rhythm.longest_focus_min, at=d.stats.rhythm.longest_focus_at, k=d.stats.rhythm.interruptions, pct=(d.stats.rhythm.fragmented_ratio * 100) | round(0) | int) }}
 {% endif %}
 {% if d.report.insight %}
-## 补充观察
+## {{ t("Additional observations") }}
 
-{% for it in d.report.insight %}- **{{ it.observation }}**{{ "　·　依据：" ~ it.evidence if it.evidence else "" }}{{ "　·　下次：" ~ it.action if it.action else "" }}
+{% for it in d.report.insight %}- **{{ it.observation }}**{{ " · " ~ t("Basis: {body}", body=it.evidence) if it.evidence else "" }}{{ " · " ~ t("Next time: {body}", body=it.action) if it.action else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.friction %}
-## 卡点与代价
+## {{ t("Blockers & cost") }}
 
-{% for it in d.report.friction %}- **{{ it.what }}**{{ "　·　原因：" ~ it.cause if it.cause else "" }}{{ "　·　代价：" ~ it.cost if it.cost else "" }}{{ "　·　处理：" ~ it.fix if it.fix else "" }}
+{% for it in d.report.friction %}- **{{ it.what }}**{{ " · " ~ t("Cause: {body}", body=it.cause) if it.cause else "" }}{{ " · " ~ t("Cost: {body}", body=it.cost) if it.cost else "" }}{{ " · " ~ t("Handling: {body}", body=it.fix) if it.fix else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.decisions %}
-## 决策
+## {{ t("Decisions") }}
 
-{% for it in d.report.decisions %}- {{ it.what }}{{ "　— " ~ it.why if it.why else "" }}
+{% for it in d.report.decisions %}- {{ it.what }}{{ " — " ~ it.why if it.why else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.learnings %}
-## 收获
+## {{ t("Learnings") }}
 
 {% for it in d.report.learnings %}- {{ it.what }}
 {% endfor %}
 {% endif %}
 {% if rv.tomorrow_extra %}
-## 明天
+## {{ t("Tomorrow") }}
 
-{% for it in rv.tomorrow_extra %}- [ ] {{ it.item }}{{ "　（" ~ it.when ~ "）" if it.when else "" }}{{ "　— " ~ it.why if it.why else "" }}
+{% for it in rv.tomorrow_extra %}- [ ] {{ it.item }}{{ " (" ~ it.when ~ ")" if it.when else "" }}{{ " — " ~ it.why if it.why else "" }}
 {% endfor %}
 {% endif %}
 {% if d.report.offline %}
-## 人工补录
+## {{ t("Manual entries") }}
 
-> [!note] 屏幕看不到的工作
-> 以下由本人手动登记，不属于屏幕活动统计。
+> [!note] {{ t("Work the screen cannot see") }}
+> {{ t("Entered by hand below; not part of screen activity stats.") }}
 
-| 时间 | 事项 | 说明 |
+| {{ t("Time") }} | {{ t("Item") }} | {{ t("Note") }} |
 |---|---|---|
 {% for o in d.report.offline %}| {{ o.start }}–{{ o.end }} | **{{ o.label }}** | {{ o.note or "—" }} |
 {% endfor %}
 {% endif %}
 {% if d.report.behaviors %}
-## 附录 A · 连续工作段
+## {{ t("Appendix A · Work segments") }}
 
-| 时间 | 时长 | 行为 | 具体在做什么 |
+| {{ t("Time") }} | {{ t("Duration") }} | {{ t("Activity") }} | {{ t("Details") }} |
 |---|---|---|---|
-{% for it in d.report.behaviors %}| {{ it.start }}–{{ it.end }} | {{ it.minutes }} 分 | **{{ it.label }}**{{ " ?" if it.confidence == "low" else "" }} | {{ it.detail or "—" }} |
+{% for it in d.report.behaviors %}| {{ it.start }}–{{ it.end }} | {{ t("{n} min", n=it.minutes) }} | **{{ it.label }}**{{ " ?" if it.confidence == "low" else "" }} | {{ it.detail or "—" }} |
 {% endfor %}
 {% endif %}
 {% if d.refs %}
-## 附录 B · 相关文档
+## {{ t("Appendix B · Related documents") }}
 
-{% for r in d.refs %}- [{{ r.label }}]({{ r.uri }}){{ "（暂不可跳转）" if not r.clickable else "" }}
+{% for r in d.refs %}- [{{ r.label }}]({{ r.uri }}){{ " " ~ t("(not clickable yet)") if not r.clickable else "" }}
 {% endfor %}
 {% endif %}
 {% if d.gaps %}
-## 附录 C · 数据缺口
+## {{ t("Appendix C · Data gaps") }}
 
-> [!warning] 全窗口内没有采集记录的时段（含夜间与正常休息，不算进上面的时长）：{% for g in d.gaps %}{{ g.start }}–{{ g.end }}（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}{{ "。" }}
+> [!warning] {{ t("Spans with no capture inside the whole window (night and normal breaks included; not counted in the durations above):") }}
+> {% for g in d.gaps %}{{ g.start }}–{{ g.end }} ({{ t("{n} min", n=g.minutes) }}){% if not loop.last %}{{ t(", ") }}{% endif %}{% endfor %}{{ t(".") }}
 {% endif %}
 {% if d.report.opening_md or d.report.summary_md %}
-## 附录 D · 过程叙述
+## {{ t("Appendix D · Narrative") }}
 
 {% if d.report.opening_md %}{{ d.report.opening_md }}
 
 {% endif %}
 {% if d.report.summary_md %}{{ d.report.summary_md }}
-{% else %}_{{ d.report.notes_for_human or "这一天没有生成叙述性总结。" }}_
+{% else %}_{{ d.report.notes_for_human or t("No narrative summary was generated for this day.") }}_
 {% endif %}{% endif %}{{ "\n" }}---
 
-*由 What-I-Did 于 {{ d.generated_at }} 生成（第 {{ d.revision }} 版，{{ d.meta.model or "未调用模型" }}）*
+*{{ t("Generated by What-I-Did at {at} (revision {n}, {model})", at=d.generated_at, n=d.revision, model=d.meta.model or t("model not called")) }}*

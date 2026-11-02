@@ -29,6 +29,10 @@ import tkinter.simpledialog as simpledialog  # noqa: E402
 import gui  # noqa: E402
 import paths  # noqa: E402
 import status  # noqa: E402
+from i18n import t  # noqa: E402
+
+# 界面语言可能是英文也可能是中文：按钮用 t() 查，脚本跟着配置走
+gui._apply_locale()
 
 RESULTS: list[tuple[bool, str, str]] = []
 
@@ -150,11 +154,11 @@ def main() -> int:
     print("\n[5] 补录（点击「补录」→ 输入 → 落盘）")
     manual_path = paths.day_dir(day_ok) / "manual.json"
     before = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
-    btn = find_button(page.badge_box, "补录")
+    btn = find_button(page.badge_box, t("Add entry"))
     check("日报页有「补录」按钮", btn is not None)
     if btn is not None:
         simpledialog.askstring = lambda *a, **k: "10:00-11:00 线下客户沟通"
-        click(btn, app, "补录")
+        click(btn, app, t("Add entry"))
         pump(app, 0.8)
         after = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
         got = json.loads(after)["offline"] if after else []
@@ -162,14 +166,14 @@ def main() -> int:
               f"{len(got)} 条")
 
         simpledialog.askstring = lambda *a, **k: "随便写点没时间的"
-        click(find_button(page.badge_box, "补录"), app, "补录(坏格式)")
+        click(find_button(page.badge_box, t("Add entry")), app, "补录(坏格式)")
         pump(app, 0.8)
         after2 = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
         got2 = json.loads(after2)["offline"] if after2 else []
         check("格式不对不写入", len(got2) == len(got), f"{len(got2)} 条（期望 {len(got)}）")
 
         simpledialog.askstring = lambda *a, **k: "25:00-26:00 错时间"
-        click(find_button(page.badge_box, "补录"), app, "补录(错时间)")
+        click(find_button(page.badge_box, t("Add entry")), app, "补录(错时间)")
         pump(app, 0.8)
         after3 = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
         got3 = json.loads(after3)["offline"] if after3 else []
@@ -179,7 +183,7 @@ def main() -> int:
     print("\n[6] 遗忘（先取消，再确认）")
     if day_del in page._rows:
         click(page._rows[day_del]["widgets"][0], app, "row:2026-10-19")
-    btn = find_button(page.badge_box, "遗忘这天")
+    btn = find_button(page.badge_box, t("Forget day"))
     check("日报页有「遗忘这天」按钮", btn is not None)
     if btn is not None:
         gui.messagebox.askyesno = lambda *a, **k: False
@@ -188,7 +192,7 @@ def main() -> int:
         check("取消时不删数据", (paths.REPORTS / f"{day_del}.json").exists(), "日报还在")
 
         gui.messagebox.askyesno = lambda *a, **k: True
-        click(find_button(page.badge_box, "遗忘这天") or btn, app, "遗忘(确认)")
+        click(find_button(page.badge_box, t("Forget day")) or btn, app, "遗忘(确认)")
         # 等后台线程跑完并且结果已经回主线程（_busy 归零），否则 done() 里的
         # show_placeholder 会晚一步落到界面上，把后续断言全带偏
         ok = pump(app, 20.0, until=lambda: app._busy == 0
@@ -221,19 +225,19 @@ def main() -> int:
 
         _collect(page.badge_box)
         print(f"       徽章区: {badges}")
-        btn_rv = find_button(page.badge_box, "审核待发内容")
+        btn_rv = find_button(page.badge_box, t("Review queued content"))
         check("已出报+有待审时出现入口", btn_rv is not None)
         if btn_rv is not None:
-            click(btn_rv, app, "审核待发内容")
+            click(btn_rv, app, t("Review queued content"))
             pump(app, 0.8)
             text = page.text.get("1.0", "end")
             check("点击后切到审核视图", "将要发给模型" in text, f"{len(text)} 字")
 
-            send = find_button(page.badge_box, "审核并发送")
+            send = find_button(page.badge_box, t("Approve & send"))
             check("审核视图有「审核并发送」", send is not None)
             if send is not None:
                 prev_rev = int((status.load_report(day_ok) or {}).get("revision") or 0)
-                click(send, app, "审核并发送")
+                click(send, app, t("Approve & send"))
                 done = pump(app, 40.0, until=lambda: app._busy == 0
                             and not status.pending_review(day_ok))
                 pump(app, 0.8)
@@ -253,15 +257,15 @@ def main() -> int:
         page.render(day_ok)
         pump(app, 0.8)
         check("重新制造出待审预览", bool(status.pending_review(day_ok)))
-        btn_rv = find_button(page.badge_box, "审核待发内容")
+        btn_rv = find_button(page.badge_box, t("Review queued content"))
         if btn_rv is not None:
             click(btn_rv, app, "审核待发内容(第二次)")
             pump(app, 0.6)
         rev_before = int((status.load_report(day_ok) or {}).get("revision") or 0)
-        discard = find_button(page.badge_box, "丢弃")
+        discard = find_button(page.badge_box, t("Discard"))
         check("审核视图有「丢弃」", discard is not None)
         if discard is not None:
-            click(discard, app, "丢弃")
+            click(discard, app, t("Discard"))
             pump(app, 3.0, until=lambda: not status.pending_review(day_ok))
             rev_after = int((status.load_report(day_ok) or {}).get("revision") or 0)
             check("丢弃后预览消失", not status.pending_review(day_ok))
@@ -271,10 +275,10 @@ def main() -> int:
     print("\n[8] 刷新按钮与 F5")
     app.show("dash")
     pump(app, 0.6)
-    refresh = find_button(app, "刷新")
+    refresh = find_button(app, t("Refresh"))
     check("顶部有「刷新」按钮", refresh is not None)
     if refresh is not None:
-        click(refresh, app, "刷新")
+        click(refresh, app, t("Refresh"))
         pump(app, 2.5, until=lambda: bool(app.snap))
         check("点击刷新后仍有快照", bool(app.snap))
     try:

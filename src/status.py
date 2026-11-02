@@ -1,6 +1,8 @@
 """状态快照：CLI `status` 与图形界面共用，集中判定"采集在不在跑、今天有多少数据"。"""
 from __future__ import annotations
 
+from i18n import t
+
 import json
 import shutil
 from pathlib import Path
@@ -49,14 +51,14 @@ def pause_info() -> dict | None:
         return None
     data = read_json(paths.PAUSE_FILE)
     if not isinstance(data, dict) or not data:
-        return {"until": "", "error": "暂停标记不可读/为空，按暂停处理"}
+        return {"until": "", "error": t("Pause marker is unreadable or empty; treating as paused")}
     until = data.get("until") or ""
     if until:
         try:
             if timeutil.parse(until) <= timeutil.now():
                 return None
         except Exception:
-            return {"until": "", "error": "暂停时间无效，按暂停处理"}
+            return {"until": "", "error": t("Pause end time is invalid; treating as paused")}
     return data
 
 
@@ -266,7 +268,7 @@ def pending_review(day: str) -> dict:
         return {}
     data = read_json(p, {}) or {}
     if not isinstance(data, dict):
-        return {"error": "待审文件不可读"}
+        return {"error": t("Review file is unreadable")}
     return {
         "day": data.get("day") or day,
         "generated_at": data.get("generated_at", ""),

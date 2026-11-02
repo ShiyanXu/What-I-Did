@@ -17,6 +17,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import json
 
 import paths
@@ -78,12 +80,14 @@ def add_offline(day: str, start: str, end: str, label: str, note: str = "") -> d
     data = load(day)
     s, e = _norm_hm(start), _norm_hm(end)
     if not s or not e:
-        raise ValueError(f"时间格式应为 HH:MM（00:00–23:59），收到 {start} – {end}")
+        raise ValueError(t("Time must be HH:MM (00:00–23:59); got {start} – {end}",
+                           start=start, end=end))
     if e <= s:
-        raise ValueError("结束时间必须晚于开始时间（跨午夜请拆成两条）")
+        raise ValueError(t("End time must be later than start time "
+                           "(split spans across midnight into two entries)"))
     name = str(label or "").strip()
     if not name:
-        raise ValueError("label 不能为空")
+        raise ValueError(t("label cannot be empty"))
     clean = {
         "start": s, "end": e,
         "label": name[:60],
@@ -105,9 +109,9 @@ def set_override(day: str, seg_id: str, verb: str = "", label: str = "", note: s
     data = load(day)
     seg_id = str(seg_id or "").strip()
     if not seg_id:
-        raise ValueError("seg_id 不能为空")
+        raise ValueError(t("seg_id cannot be empty"))
     if not (verb or label or note):
-        raise ValueError("verb / label / note 至少填一项")
+        raise ValueError(t("Fill in at least one of verb / label / note"))
     data["behavior_overrides"] = [o for o in data["behavior_overrides"] if o.get("seg_id") != seg_id]
     data["behavior_overrides"].append({
         "seg_id": seg_id,
@@ -151,4 +155,5 @@ def apply_overrides(report_data: dict, mdata: dict) -> None:
     notes = str(mdata.get("notes") or "").strip()
     if notes:
         prev = str(report_data.get("notes_for_human") or "").strip()
-        report_data["notes_for_human"] = (prev + ("\n" if prev else "") + f"人工备注：{notes}")[:500]
+        report_data["notes_for_human"] = (prev + ("\n" if prev else "")
+                                          + t("Manual note: {notes}", notes=notes))[:500]

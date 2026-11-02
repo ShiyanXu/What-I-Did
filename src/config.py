@@ -1,6 +1,8 @@
 """配置加载：有效配置合并默认值；损坏配置显式报错并关闭内容处理。"""
 from __future__ import annotations
 
+from i18n import t
+
 import copy
 import math
 import os
@@ -16,6 +18,7 @@ import privacy
 
 DEFAULTS: dict[str, Any] = {
     "app": {"day_cutoff_hour": 4, "timezone": "Asia/Shanghai"},
+    "ui": {"language": "en"},
     "capture": {
         "interval_sec": 20,
         "jitter_sec": 3,
@@ -183,13 +186,15 @@ def _parse_config(text: str) -> dict:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
-        where = f"（第 {mark.line + 1} 行）" if mark is not None else ""
-        raise ConfigError(f"配置 YAML 无法解析{where}，已停止采集与模型外发") from exc
+        where = t(" (line {n})", n=mark.line + 1) if mark is not None else ""
+        raise ConfigError(t("Cannot parse the config YAML{where}; capture and model requests stopped",
+                            where=where)) from exc
     if not isinstance(data, dict) or not data:
-        raise ConfigError("配置必须是非空 YAML 对象，已停止采集与模型外发")
+        raise ConfigError(t("The config must be a non-empty YAML mapping; "
+                            "capture and model requests stopped"))
     for section in DEFAULTS:
         if section in data and not isinstance(data[section], dict):
-            raise ConfigError(f"配置段 {section} 必须是对象")
+            raise ConfigError(t("Config section {section} must be a mapping", section=section))
 
     def check_types(values: dict, defaults: dict, prefix: str = "") -> None:
         for key, value in values.items():
@@ -199,7 +204,7 @@ def _parse_config(text: str) -> dict:
             name = f"{prefix}.{key}" if prefix else key
             if isinstance(expected, dict):
                 if not isinstance(value, dict):
-                    raise ConfigError(f"{name} 必须是对象")
+                    raise ConfigError(t("{name} must be a mapping", name=name))
                 check_types(value, expected, name)
             elif expected is not None:
                 if type(expected) in (int, float):
@@ -207,7 +212,7 @@ def _parse_config(text: str) -> dict:
                 else:
                     valid = isinstance(value, type(expected))
                 if not valid:
-                    raise ConfigError(f"{name} 的配置类型无效")
+                    raise ConfigError(t("{name} has an invalid config type", name=name))
 
     check_types(data, DEFAULTS)
     merged = _deep_merge(DEFAULTS, data)
@@ -215,14 +220,16 @@ def _parse_config(text: str) -> dict:
     privacy.require_valid(cfg)
     privacy.require_local_ocr_url(cfg.get("ocr.http_url", ""))
     if cfg.get("ocr.engine") not in ("auto", "umi_http", "umi_cli", "rapidocr", "none"):
-        raise ConfigError("ocr.engine 不是支持的引擎")
+        raise ConfigError(t("ocr.engine is not a supported engine"))
 
     def number(key: str, minimum: float, maximum: float | None = None, integer: bool = False) -> None:
         value = cfg.get(key)
         valid = type(value) is int if integer else type(value) in (int, float)
         if (not valid or not math.isfinite(value) or value < minimum
                 or (maximum is not None and value > maximum)):
-            raise ConfigError(f"{key} 必须是有效范围内的{'整数' if integer else '数字'}")
+            raise ConfigError(t("{key} must be an integer in the valid range", key=key)
+                              if integer else
+                              t("{key} must be a number in the valid range", key=key))
 
     for key in ("app.day_cutoff_hour", "report.trigger_hour", "retention.clean_hour"):
         number(key, 0, 23, integer=True)
@@ -246,13 +253,13 @@ def _parse_config(text: str) -> dict:
     number("ocr.rapidocr.min_score", 0, 1)
     grid = cfg.get("dedupe.cell_grid")
     if len(grid) != 2 or any(type(v) is not int or v <= 0 for v in grid):
-        raise ConfigError("dedupe.cell_grid 必须是两个正整数")
+        raise ConfigError(t("dedupe.cell_grid must be two positive integers"))
     for key in ("refs.providers", "refs.search_roots"):
         if any(not isinstance(value, str) for value in cfg.get(key)):
-            raise ConfigError(f"{key} 必须是字符串列表")
+            raise ConfigError(t("{key} must be a list of strings", key=key))
     for key in ("ocr.crop_active_window", "capture.pause_on_locked", "report.review_mode"):
         if not isinstance(cfg.get(key), bool):
-            raise ConfigError(f"{key} 必须是 true 或 false")
+            raise ConfigError(t("{key} must be true or false", key=key))
     return merged
 
 
@@ -279,7 +286,8 @@ def _has_existing_runtime() -> bool:
 def ensure_default(log=None) -> dict:
     """首次运行落地配置。绿色版拷到新机器后，双击即可用，不需要手工建文件。"""
     if not paths.CONFIG_PATH.exists() and _has_existing_runtime():
-        raise ConfigError("已有运行数据但配置文件丢失，已停止内容处理；请恢复并检查原配置")
+        raise ConfigError(t("Runtime data exists but the config file is gone; content "
+                            "processing stopped. Restore and check the original config"))
     paths.ensure_dirs()
     actions: dict[str, str] = {}
 
@@ -291,7 +299,8 @@ def ensure_default(log=None) -> dict:
                 actions["config"] = str(paths.CONFIG_PATH)
             else:
                 paths.CONFIG_PATH.write_text(
-                    "# 自动生成的最小配置（未找到随包模板）\n" + yaml.safe_dump(
+                    t("# Minimal auto-generated config (bundled template not found)\n")
+                    + yaml.safe_dump(
                         DEFAULTS, allow_unicode=True, sort_keys=False),
                     encoding="utf-8")
                 actions["config"] = str(paths.CONFIG_PATH)
@@ -308,16 +317,16 @@ def ensure_default(log=None) -> dict:
     if not paths.BINDINGS_PATH.exists():
         try:
             paths.BINDINGS_PATH.write_text(
-                "# 手工引用绑定：把某个项目/标题固定挂到某份文档上\n"
-                "# - match: {title_contains: \"需求评审\"}\n"
-                "#   uri: \"https://doc.example.com/xxx\"\n"
-                "#   label: \"需求评审纪要\"\n[]\n",
+                t("# Manual reference bindings: pin a project or title to a document\n"
+                  "# - match: {title_contains: \"design review\"}\n"
+                  "#   uri: \"https://doc.example.com/xxx\"\n"
+                  "#   label: \"Design review notes\"\n[]\n"),
                 encoding="utf-8")
         except OSError:
             pass
 
     if log and actions.get("config"):
-        log.info("首次运行：已生成配置 %s", actions["config"])
+        log.info("First run: wrote the config to %s", actions["config"])
     return actions
 
 
@@ -455,7 +464,8 @@ def save_values(updates: dict[str, Any]) -> list[str]:
         text = paths.CONFIG_PATH.read_text(encoding="utf-8")
         _parse_config(text)  # 不用安全占位值覆盖用户的损坏配置，先修复原文件。
     elif _has_existing_runtime() or (_CACHE is not None and _CACHE.source_path == paths.CONFIG_PATH):
-        raise ConfigError("原配置已丢失，拒绝用表单占位值替代；请先恢复原配置")
+        raise ConfigError(t("The original config is gone; refusing to replace it with form "
+                            "placeholders. Restore it first"))
     elif paths.DEFAULT_CONFIG.exists():
         text = paths.DEFAULT_CONFIG.read_text(encoding="utf-8")
     else:
@@ -466,7 +476,7 @@ def save_values(updates: dict[str, Any]) -> list[str]:
     for dotted, value in updates.items():
         parts = dotted.split(".")
         if len(parts) != 2:
-            raise ValueError(f"只支持 section.key 形式：{dotted}")
+            raise ValueError(t("Only the section.key form is supported: {dotted}", dotted=dotted))
         lines = _set_scalar(lines, parts[0], parts[1], value)
         written.append(dotted)
 
@@ -499,7 +509,8 @@ def load(reload: bool = False) -> Config:
     try:
         if not paths.CONFIG_PATH.exists():
             if _CACHE is not None and _CACHE.source_path == paths.CONFIG_PATH:
-                raise ConfigError("运行中的配置文件已丢失，已停止采集与模型外发")
+                raise ConfigError(t("The config file disappeared while running; capture and "
+                                    "model requests stopped"))
             ensure_default()
         text = paths.CONFIG_PATH.read_text(encoding="utf-8")
         data = _parse_config(text)
@@ -510,7 +521,7 @@ def load(reload: bool = False) -> Config:
         safe["privacy"].update(store_screenshots=False, allow_llm=False)
         safe["ocr"]["engine"] = "none"
         error = (str(exc) if isinstance(exc, (ConfigError, privacy.PrivacyError))
-                 else "无法读取配置文件，已停止采集与模型外发")
+                 else t("Cannot read the config file; capture and model requests stopped"))
         _CACHE = Config(safe, text, error=error, source_path=paths.CONFIG_PATH)
     # 使用读前的签名；若读取期间发生编辑，下一次调用会重新加载而不是缓存旧内容。
     _CACHE_STAMP = stamp

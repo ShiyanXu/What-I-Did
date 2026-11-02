@@ -1,6 +1,8 @@
 """OpenAI 兼容的极简客户端：一个 POST 就够，不引 SDK。"""
 from __future__ import annotations
 
+from i18n import t
+
 import copy
 import json
 import re
@@ -48,12 +50,12 @@ class LLMClient:
         try:
             privacy.require_valid(cfg)
             if not cfg.get("privacy.allow_llm", True):
-                raise privacy.PrivacyError("已禁止模型外发，仅可生成本地时间线")
+                raise privacy.PrivacyError(t("Sending to the model is disabled; only the local timeline can be generated"))
             if cfg.get("privacy", {}) != self.privacy_policy:
-                raise privacy.PrivacyError("隐私策略已变化，请按新策略重新生成摘要")
+                raise privacy.PrivacyError(t("The privacy policy changed; regenerate under the new policy"))
             if (str(cfg.get("llm.base_url", "") or "").rstrip("/") != self.base_url
                     or cfg.get("llm.model", "deepseek-chat") != self.model):
-                raise privacy.PrivacyError("模型配置已变化，请使用新设置重新生成")
+                raise privacy.PrivacyError(t("The model configuration changed; regenerate with the new settings"))
             result = dict(payload)
             result["messages"] = privacy.redact_value(
                 payload.get("messages", []), cfg, extra_secrets=(self.api_key, cfg.api_key()))
@@ -77,27 +79,28 @@ class LLMClient:
                 allow_redirects=False,
             )
         except requests.exceptions.Timeout as exc:
-            raise LLMError("network", f"请求超时 {self.timeout:.0f}s", retryable=True) from None
+            raise LLMError("network", t("Request timed out after {n}s", n=f"{self.timeout:.0f}"), retryable=True) from None
         except requests.exceptions.RequestException as exc:
             # 异常和响应正文可能回显 URL、请求或凭据，不写入日志/日报。
-            raise LLMError("network", "网络请求失败，请检查连接、代理和模型地址", retryable=True) from None
+            raise LLMError("network", t("Network request failed; check the connection, proxy and model URL"), retryable=True) from None
         finally:
             sess.close()
 
         if r.status_code == 401:
-            raise LLMError("auth", "API Key 无效或已过期（401）", retryable=False)
+            raise LLMError("auth", t("API key is invalid or expired (401)"), retryable=False)
         if r.status_code == 402:
-            raise LLMError("budget", "账户余额不足（402）", retryable=False)
+            raise LLMError("budget", t("Account balance is insufficient (402)"), retryable=False)
         if r.status_code == 429:
-            raise LLMError("server", "限流（429）", retryable=True)
+            raise LLMError("server", t("Rate limited (429)"), retryable=True)
         if r.status_code >= 500:
-            raise LLMError("server", f"服务端错误 {r.status_code}", retryable=True)
+            raise LLMError("server", t("Server error {code}", code=r.status_code), retryable=True)
         if r.status_code != 200:
-            raise LLMError("server", f"HTTP {r.status_code}（响应正文未记录；不跟随重定向）", retryable=False)
+            raise LLMError("server", t("HTTP {code} (response body not recorded; redirects not followed)",
+                                      code=r.status_code), retryable=False)
         try:
             return r.json()
         except ValueError as exc:
-            raise LLMError("server", "响应不是 JSON（响应正文未记录）", retryable=True) from None
+            raise LLMError("server", t("Response is not JSON (response body not recorded)"), retryable=True) from None
 
     def chat_json(self, system: str, user: str, max_tokens: int = 6000) -> dict:
         cfg = privacy.current_config(self.cfg)
@@ -106,11 +109,12 @@ class LLMClient:
         except privacy.PrivacyError as exc:
             raise LLMError("privacy", str(exc)) from exc
         if not cfg.get("privacy.allow_llm", True):
-            raise LLMError("privacy", "已禁止模型外发，仅可生成本地时间线")
+            raise LLMError("privacy", t("Sending to the model is disabled; only the local timeline can be generated"))
         if not self.configured():
-            raise LLMError("auth", "未配置 API Key", retryable=False)
+            raise LLMError("auth", t("No API key configured"), retryable=False)
         if self.calls >= self.max_calls:
-            raise LLMError("budget", f"已达单份日报调用上限（{self.max_calls} 次）", retryable=False)
+            raise LLMError("budget", t("Reached the per-report call limit ({n} calls)", n=self.max_calls),
+                           retryable=False)
         payload = {
             "model": self.model,
             "messages": [
@@ -138,9 +142,9 @@ class LLMClient:
                     raise
                 wait = min(20, 2 ** attempt)
                 if self.log:
-                    self.log.warning("模型调用失败（%s），%ds 后第 %d 次重试", exc.kind, wait, attempt + 1)
+                    self.log.warning("Model call failed (%s); retry %d in %ds", exc.kind, attempt + 1, wait)
                 time.sleep(wait)
-        raise last or LLMError("server", "未知错误")
+        raise last or LLMError("server", t("Unknown error"))
 
     @staticmethod
     def _parse_json(content: str) -> dict:
@@ -154,9 +158,9 @@ class LLMClient:
                 try:
                     data = json.loads(text[start:end + 1])
                 except json.JSONDecodeError as exc:
-                    raise LLMError("bad_json", f"JSON 解析失败: {exc}") from exc
+                    raise LLMError("bad_json", t("Failed to parse JSON: {e}", e=exc)) from exc
             else:
-                raise LLMError("bad_json", "响应里找不到 JSON")
+                raise LLMError("bad_json", t("No JSON found in the response"))
         if not isinstance(data, dict):
-            raise LLMError("bad_json", "顶层不是对象")
+            raise LLMError("bad_json", t("The top level is not an object"))
         return data

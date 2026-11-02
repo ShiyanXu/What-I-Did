@@ -40,6 +40,10 @@ MODULES = [
     "manual", "forget", "search", "weekly", "export_safe",
 ]
 
+# 词条表（i18n.py、i18n_zh_cn.py…）由 i18n.locale_module() 用 importlib 动态加载，
+# 静态分析一律看不到；这里按文件名自动收集，将来加一门语言不必再改这份清单。
+MODULES += sorted(p.stem for p in SRC.glob("i18n*.py"))
+
 datas = [
     (str(SRC / "templates"), "src/templates"),
     (str(ROOT / "config.default.yaml"), "."),

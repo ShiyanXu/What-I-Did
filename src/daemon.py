@@ -63,11 +63,11 @@ def _spawn_tick(log) -> bool:
             creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
         )
         if log:
-            log.info("已拉起 tick 进程：%s", " ".join(cmd))
+            log.info("Spawned the tick process: %s", " ".join(cmd))
         return True
     except Exception as exc:
         if log:
-            log.warning("拉起 tick 失败（%s），改为在常驻进程里直接跑", exc)
+            log.warning("Could not spawn tick (%s); running it inside the daemon instead", exc)
         return False
 
 
@@ -111,7 +111,7 @@ def _guard_allows(day: str, why: str, log) -> bool:
         rec["rev"] = rev
 
     attempts = int(rec.get("attempts", 0))
-    if attempts >= MAX_ATTEMPTS and why != "补终版":
+    if attempts >= MAX_ATTEMPTS and why != tick_mod.WHY_FINAL:
         return False
 
     wait = min(3600, 300 * (2 ** min(attempts, 3)))
@@ -137,7 +137,7 @@ def _check_report_trigger(cfg, log) -> None:
         due = tick_mod.pending(cfg, timeutil.now(), days=2)
     except Exception as exc:
         if log:
-            log.warning("检查出报条件失败: %s", exc)
+            log.warning("Failed to check the report condition: %s", exc)
         return
     if not due:
         return
@@ -147,7 +147,7 @@ def _check_report_trigger(cfg, log) -> None:
         if not _guard_allows(day, why, log):
             continue
         if log:
-            log.info("到点出报：%s（%s）", day, why)
+            log.info("Report due: %s (%s)", day, tick_mod.why_text(why))
         if not _spawn_tick(log):
             _run_tick_inline(log)
         return
@@ -159,15 +159,16 @@ def run(cfg, log) -> int:
     with SingleInstance("WhatIDidDaemon") as lock:
         if not lock.acquired:
             if log:
-                log.warning("已有采集进程在运行，本次退出")
+                log.warning("Another recorder is already running; exiting")
             return 0
 
         sid, csid = winapi.session_id(), winapi.console_session_id()
         if sid != csid:
-            log.warning("当前 Session=%s 与控制台 Session=%s 不一致，截图可能全黑"
-                        "（计划任务必须勾选「只在用户登录时运行」）", sid, csid)
+            log.warning("Session=%s does not match the console session %s; "
+                        "screenshots may come out black (the scheduled task must run "
+                        "only when the user is logged on)", sid, csid)
 
-        log.info("daemon 启动 pid=%s session=%s", os.getpid(), sid)
+        log.info("daemon started pid=%s session=%s", os.getpid(), sid)
         col = capture.Collector(cfg, log)
         col.start()
 

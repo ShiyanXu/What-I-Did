@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import json
 import os
 import random
@@ -37,14 +39,16 @@ def grab_frame(cfg, fg: dict) -> tuple[Image.Image, tuple[int, int]]:
         return ImageGrab.grab(all_screens=True), (vx, vy)
     rect = fg.get("rect") or (0, 0, 0, 0)
     if len(rect) != 4:
-        raise privacy.PrivacyError("活动窗口范围无效，已跳过截图")
+        raise privacy.PrivacyError(t("The active window rect is invalid; screenshot skipped"))
     left, top = max(vx, rect[0]), max(vy, rect[1])
     right, bottom = min(vx + vw, rect[2]), min(vy + vh, rect[3])
     if right - left < 80 or bottom - top < 60:
-        raise privacy.PrivacyError("活动窗口不可见或范围过小，已跳过截图")
+        raise privacy.PrivacyError(t("The active window is not visible or too small; "
+                                     "screenshot skipped"))
     image = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
     if image.size != (right - left, bottom - top):
-        raise privacy.PrivacyError("截图尺寸与窗口范围不一致，已跳过截图")
+        raise privacy.PrivacyError(t("The screenshot size does not match the window rect; "
+                                     "screenshot skipped"))
     return image, (left, top)
 
 
@@ -58,19 +62,22 @@ def diagnostic_image(cfg) -> tuple[Image.Image, dict]:
     fg = winapi.foreground_info()
     reason = privacy.capture_reason(cfg, fg, winapi.idle_seconds(), winapi.is_locked(), force=True)
     if reason or privacy.should_skip_ocr(fg.get("app", ""), cfg):
-        raise privacy.PrivacyError(f"当前隐私策略禁止屏幕识别：{reason or 'metadata_only'}")
+        raise privacy.PrivacyError(t("Current privacy policy blocks screen recognition: {reason}",
+                                     reason=reason or "metadata_only"))
     image, origin = grab_frame(cfg, fg)
     if cfg.get("ocr.crop_active_window", True):
         image = vision.crop_region(image, tuple(fg.get("rect") or (0, 0, 0, 0)), origin)
         if image is None:
-            raise privacy.PrivacyError("活动窗口裁剪失败，未回退到全屏")
+            raise privacy.PrivacyError(t("Cropping to the active window failed; "
+                                         "did not fall back to the full screen"))
     latest = privacy.current_config(cfg)
     if (not same_foreground(fg, winapi.foreground_info())
             or privacy.capture_reason(latest, fg, 0, winapi.is_locked(), force=True)
             or privacy.should_skip_ocr(fg.get("app", ""), latest)
             or latest.get("privacy", {}) != cfg.get("privacy", {})
             or latest.get("ocr", {}) != cfg.get("ocr", {})):
-        raise privacy.PrivacyError("识别前窗口或隐私状态已变化，已取消")
+        raise privacy.PrivacyError(t("The window or privacy state changed before "
+                                     "recognition; cancelled"))
     return image, fg
 
 
@@ -189,7 +196,7 @@ class Collector:
             self._prev_hash, self._prev_grid, self._prev_sig = None, None, ""
             if time.time() - self._paused_log_ts > 300:
                 self._paused_log_ts = time.time()
-                self.log.info("采集暂停：%s（不记录窗口内容）", reason)
+                self.log.info("Capture paused: %s (window content is not recorded)", reason)
             return event
 
         event = privacy.sanitize_event(event, self.cfg)
@@ -203,7 +210,8 @@ class Collector:
         try:
             img, origin = grab_frame(self.cfg, fg)
         except Exception as exc:
-            self.log.warning("抓屏失败（%s），未回退全屏", type(exc).__name__)
+            self.log.warning("Screen grab failed (%s); did not fall back to the full screen",
+                             type(exc).__name__)
             event = self._write_event(day, privacy.anonymous_event(event, "grab_failed"), kind="error")
             self._heartbeat(day, "grab_failed", event)
             return event
@@ -352,7 +360,7 @@ class Collector:
             fh.write(json.dumps(event, ensure_ascii=False) + "\n")
             fh.flush()
         except Exception as exc:
-            self.log.warning("写事件失败: %s", exc)
+            self.log.warning("Failed to write event: %s", exc)
         return event
 
     def _heartbeat(self, day: str, state: str, event: dict) -> None:
@@ -396,7 +404,7 @@ class Collector:
                 try:
                     self.sample()
                 except Exception as exc:
-                    self.log.exception("采样异常: %s", exc)
+                    self.log.exception("Sampling failed: %s", exc)
                 jitter = random.uniform(-self.jitter, self.jitter) if self.jitter else 0
                 next_at = now + max(5.0, self.interval + jitter)
                 if time.time() - last_hb >= 30:

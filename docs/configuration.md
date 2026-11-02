@@ -1,193 +1,213 @@
-# 配置参考
+# Configuration reference
 
-配置只有一个文件：数据目录下的 `config.yaml`，由 `config.default.yaml` 在首次运行时复制生成。
+> [简体中文](configuration.zh-CN.md) · **English**
 
-## 位置与优先级
+There is exactly one config file: `config.yaml` in the data directory, copied from `config.default.yaml` on first run.
+
+## Location and precedence
 
 ```
-数据目录\
-  config.yaml            主配置
-  config\api_key.txt     模型 Key
-  config\bindings.yaml   手工文档绑定（可选）
+<data dir>\
+  config.yaml            main config
+  config\api_key.txt     model key
+  config\bindings.yaml   manual document bindings (optional)
 ```
 
-数据目录按 `WID_HOME` → 程序目录（可写则用）→ `%LOCALAPPDATA%\What-IDid` 的顺序解析。模型 Key 的读取优先级是：环境变量 `WID_LLM_API_KEY` > `config\api_key.txt` > 界面里保存的值。
+The data directory is resolved in the order `WID_HOME` → the program directory (used when writable) → `%LOCALAPPDATA%\What-IDid`. The model key is read in this order of precedence: the `WID_LLM_API_KEY` environment variable > `config\api_key.txt` > the value saved in the UI.
 
-## 生效时机
+## When changes take effect
 
-| 类别 | 何时生效 |
+| Category | When it applies |
 | --- | --- |
-| 隐私策略、外发开关 | 每次采集、每次请求前都会重读 |
-| 采样、去重、OCR 引擎参数 | 需要重启采集进程（界面保存会自动重启） |
-| 出报钟点 `report.trigger_hour` | 需要**重新注册计划任务**——触发时刻在注册时写死在系统里 |
-| 模型地址、模型名、预算 | 下一次出报 |
+| Privacy policy, outbound switch | Re-read before every capture and every request |
+| Sampling, dedupe, OCR engine parameters | Requires restarting the capture process (saving in the UI does that automatically) |
+| Report hour `report.trigger_hour` | Requires **re-registering the scheduled task** — the trigger time is written into the system at registration |
+| Model endpoint, model name, budget | The next report generation |
+| UI language `ui.language` | The window is rebuilt when you save (capture restarts as it does for any save) |
 
-## 通用
+## General
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `app.day_cutoff_hour` | `4` | 一天从几点开始算。凌晨 0–4 点归前一天，熬夜不劈成两天 |
-| `app.timezone` | `Asia/Shanghai` | 全项目统一时区，报告里的时刻都用它 |
+| `app.day_cutoff_hour` | `4` | Where a day starts. 00:00–04:00 counts towards the previous day, so a late night does not split a day in two |
+| `app.timezone` | `Asia/Shanghai` | One timezone for the whole project; every timestamp in a report uses it |
 
-## 采集 `capture`
+## User interface `ui`
 
-| 键 | 默认 | 说明 |
+```yaml
+ui:
+  language: en          # en (default) / zh-CN / auto (follow the system)
+```
+
+| Key | Default | Description |
 | --- | --- | --- |
-| `interval_sec` | `20` | 采样间隔 |
-| `jitter_sec` | `3` | 随机抖动，避免整齐得像机器人 |
-| `max_width` | `1920` | 落盘宽度上限 |
-| `jpeg_quality` | `62` | 可读性与体积的平衡点 |
-| `thumb_width` | `480` | 缩略图宽度（日报页用） |
-| `keyframe_sec` | `300` | 画面长期不变时也每 5 分钟留一张，保证时间轴不断 |
-| `idle_pause_sec` | `300` | 无键鼠超过 5 分钟停止落盘 |
-| `pause_on_locked` | `true` | 兼容字段。现在锁屏始终停采集，写 `false` 也无法绕过 |
-| `min_free_gb` | `3` | 磁盘低于此值停止落盘，心跳标记 `low_disk` |
-| `min_save_gap_sec` | `90` | 轻微变化时的最小落盘间隔 |
+| `ui.language` | `en` | The UI language, and the headings and labels of the daily report |
 
-## 去重 `dedupe`
+- `en` is the default; `zh-CN` switches to Simplified Chinese; `auto` follows the Windows UI language. Anything unrecognized falls back to `en`.
+- English is the source language, so a sentence with no translation yet degrades to English rather than showing a key or a blank.
+- Changing it in **Settings → Language → Display language** rebuilds the whole window when you save — tkinter computes its layout from the label text, so the labels cannot be swapped in place.
+- The `WID_LANG` environment variable overrides `ui.language` and has the highest priority. It is meant for scripts and self-tests that need one run in another language without touching the config.
+- The language of the report body is decided by the model output and is not affected by this setting.
 
-| 键 | 默认 | 说明 |
+## Capture `capture`
+
+| Key | Default | Description |
 | --- | --- | --- |
-| `hamming_threshold` | `4` | dHash 汉明距离 ≤ 4 视为相似 |
-| `cell_grid` | `[12, 8]` | 网格均值差的切分粒度 |
-| `cell_diff_dup` | `0.02` | 网格差 < 2% 判为完全重复 |
-| `cell_diff_major` | `0.22` | 网格差 > 22% 判为大幅变化 |
+| `interval_sec` | `20` | Sampling interval |
+| `jitter_sec` | `3` | Random jitter, so the rhythm does not look robotic |
+| `max_width` | `1920` | Maximum width written to disk |
+| `jpeg_quality` | `62` | The balance between legibility and file size |
+| `thumb_width` | `480` | Thumbnail width (used by the report page) |
+| `keyframe_sec` | `300` | Keep one frame every 5 minutes even when the picture never changes, so the timeline has no gap |
+| `idle_pause_sec` | `300` | Stop writing frames after 5 minutes without keyboard or mouse input |
+| `pause_on_locked` | `true` | Legacy field. Lock screen now always stops capture; setting `false` does not bypass it |
+| `min_free_gb` | `3` | Stop writing frames below this much free disk; the heartbeat is marked `low_disk` |
+| `min_save_gap_sec` | `90` | Minimum gap between writes for minor changes |
+
+## Dedupe `dedupe`
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `hamming_threshold` | `4` | dHash Hamming distance ≤ 4 counts as similar |
+| `cell_grid` | `[12, 8]` | Granularity of the grid mean-difference comparison |
+| `cell_diff_dup` | `0.02` | Grid difference < 2% is judged a complete duplicate |
+| `cell_diff_major` | `0.22` | Grid difference > 22% is judged a major change |
 
 ## OCR `ocr`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
 | `engine` | `auto` | `auto` / `umi_http` / `umi_cli` / `rapidocr` / `none` |
-| `umi_exe` | `""` | 已装 Umi-OCR 就填它的路径，能显著提速（需在 Umi 里开启 HTTP 服务） |
-| `rapidocr.max_side` | `1600` | 检测边长上限，越大越准也越慢 |
-| `rapidocr.min_score` | `0.5` | 低于此置信度的行直接丢弃 |
-| `warmup_on_start` | `true` | 启动时预热引擎，避免第一张图等很久 |
-| `crop_active_window` | `true` | 用原生分辨率裁活动窗口再识别，小字更准 |
-| `min_interval_same_window_sec` | `45` | 同一窗口两次识别的最小间隔 |
-| `periodic_sample_sec` | `180` | 同一窗口停留很久也每 3 分钟抽一张 |
-| `max_per_minute` | `6` | 每分钟识别上限 |
-| `max_per_day` | `1200` | 每天识别上限 |
-| `max_chars_per_shot` | `6000` | 单张图取多少字 |
-| `timeout_sec` | `90` | 单次识别超时 |
-| `recover_probe_sec` | `600` | 降级到兜底引擎后，每隔这么久重探测一次更靠前的引擎 |
-| `http_url` | `http://127.0.0.1:1224/api/ocr` | 仅允许回环地址；不走系统代理、不跟随重定向 |
+| `umi_exe` | `""` | If Umi-OCR is installed, point this at it for a significant speed-up (enable its HTTP server first) |
+| `rapidocr.max_side` | `1600` | Detection-side length cap; larger is more accurate and slower |
+| `rapidocr.min_score` | `0.5` | Lines below this confidence are dropped |
+| `warmup_on_start` | `true` | Warm up the engine at startup so the first image does not wait |
+| `crop_active_window` | `true` | Crop the active window at native resolution before recognizing; small text comes out better |
+| `min_interval_same_window_sec` | `45` | Minimum interval between two recognitions of the same window |
+| `periodic_sample_sec` | `180` | Sample once every 3 minutes even when you stay in one window for a long time |
+| `max_per_minute` | `6` | Recognition cap per minute |
+| `max_per_day` | `1200` | Recognition cap per day |
+| `max_chars_per_shot` | `6000` | How much text to take from a single image |
+| `timeout_sec` | `90` | Timeout for one recognition |
+| `recover_probe_sec` | `600` | After falling back to a backup engine, re-probe the preferred engines this often |
+| `http_url` | `http://127.0.0.1:1224/api/ocr` | Loopback addresses only; no system proxy, no redirects |
 
-`auto` 的顺序是"有 Umi-OCR 就先用它，否则用内置 RapidOCR"；两者都不可用时退化为只记窗口标题。
+`auto` means "use Umi-OCR if it is there, otherwise the built-in RapidOCR"; when neither is available it degrades to recording window titles only.
 
-## 隐私 `privacy`
+## Privacy `privacy`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `store_screenshots` | `true` | 设为 `false` 时不落图，正式采集也不 OCR，只留脱敏标题 |
-| `capture_scope` | `active_window` | `active_window` / `all_screens`。窗口不可用时跳过，**不回退全屏** |
-| `allow_llm` | `true` | `false` 禁止一切模型请求（含连接测试），本地记录与时间线日报照常 |
-| `blocked_apps` | 密码管理器若干 | 精确进程名，不区分大小写。只留匿名状态，不存应用、标题、图像与 OCR |
-| `skip_ocr_apps` | 微信/QQ 等 | 只记应用与观测时长：不存标题、不截图、不 OCR；重新处理旧数据时同样过滤 |
-| `blocked_title_patterns` | 密码/支付/银行等 | 标题命中正则即匿名化；**非法正则会让配置失效**，不会静默忽略 |
-| `redact_patterns` | `[]` | 自定义脱敏正则，落盘、历史重读、模型出口都会应用 |
+| `store_screenshots` | `true` | When `false`, no images are written and normal capture does no OCR either; only redacted titles remain |
+| `capture_scope` | `active_window` | `active_window` / `all_screens`. Skipped when the window is unavailable, **never falling back to the full screen** |
+| `allow_llm` | `true` | `false` blocks every model request (including the connection test); local recording and timeline reports carry on |
+| `blocked_apps` | a set of password managers | Exact process names, case-insensitive. Only an anonymous state is kept: no app, title, image or OCR |
+| `skip_ocr_apps` | WeChat/QQ and similar | Record only the app and observed duration: no title, no screenshot, no OCR; the same filter applies when reprocessing old data |
+| `blocked_title_patterns` | passwords/payments/banking and similar | A title matching the regex is anonymized; **an invalid regex invalidates the config**, it is never silently ignored |
+| `redact_patterns` | `[]` | Custom redaction regexes, applied on write, on history re-read and at the model boundary |
 
-`sk-`、GitHub token（含 `github_pat_`）、身份证、手机号、邮箱有不可关闭的内置规则。正则不能识别全部敏感内容，也不会给截图像素打码——敏感应用请屏蔽或暂停。
+`sk-`, GitHub tokens (including `github_pat_`), national ID numbers, phone numbers and emails have built-in rules that cannot be turned off. Regular expressions cannot recognize everything sensitive, and they do not blur pixels inside a screenshot — block or pause sensitive apps instead.
 
-## 保留与清理 `retention`
+## Retention and cleanup `retention`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `shots_days` | `7` | 截图与缩略图保留天数 |
-| `events_days` | `30` | 事件流与脱敏 OCR 保留天数 |
-| `report_excerpt_days` | `null` | 报告附录里的 OCR 摘录：`null` 跟随 `events_days`；`0` 表示不写摘录并在清理时清旧副本 |
-| `keyframes_days` | `30` | 兼容字段，关键帧尚未单独留存 |
-| `max_total_gb` | `20` | 清理时按最旧优先删截图，**不是所有数据的硬上限** |
-| `clean_hour` | `4` | 采集进程每天此钟点后清理；采集没在跑就不会自动清理 |
+| `shots_days` | `7` | Days to keep screenshots and thumbnails |
+| `events_days` | `30` | Days to keep event streams and redacted OCR |
+| `report_excerpt_days` | `null` | OCR excerpts in report appendices: `null` follows `events_days`; `0` means no excerpts are written and old copies are removed during cleanup |
+| `keyframes_days` | `30` | Legacy field; keyframes are not retained separately yet |
+| `max_total_gb` | `20` | Cleanup deletes the oldest screenshots first; this is **not a hard cap on all data** |
+| `clean_hour` | `4` | The capture process cleans up after this hour each day; with capture not running, nothing is cleaned up automatically |
 
-清理由运行中的采集进程执行，不是独立的计划任务。清理预览不写文件；与出报互斥，忙或部分失败会提示重试。
+Cleanup runs inside the capture process, not as a separate scheduled task. The preview writes no files; cleanup is mutually exclusive with report generation, and a busy or partially failed run tells you to retry.
 
-## 模型 `llm`
+## Model `llm`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `base_url` | `https://api.deepseek.com/v1` | 任何 OpenAI 兼容端点 |
-| `model` | `deepseek-chat` | 模型名 |
-| `api_key_file` | `config/api_key.txt` | 相对数据目录 |
-| `api_key_env` | `WID_LLM_API_KEY` | 优先级高于文件 |
-| `timeout_sec` | `180` | 单次请求超时 |
-| `max_retries` | `3` | 每轮最多尝试次数（含第一次） |
-| `input_char_budget` | `24000` | 输入字符**硬上限**，固定区也会被逐档裁剪，最后兜底截断 |
-| `max_calls_per_report` | `12` | 单份日报的调用数上限（含修复轮），超限直接降级 |
-| `temperature` | `0.2` | 低温度，减少叙述漂移 |
+| `base_url` | `https://api.deepseek.com/v1` | Any OpenAI-compatible endpoint |
+| `model` | `deepseek-chat` | Model name |
+| `api_key_file` | `config/api_key.txt` | Relative to the data directory |
+| `api_key_env` | `WID_LLM_API_KEY` | Takes precedence over the file |
+| `timeout_sec` | `180` | Timeout for a single request |
+| `max_retries` | `3` | Maximum attempts per round (the first one included) |
+| `input_char_budget` | `24000` | **Hard cap** on input characters; even fixed sections are trimmed step by step and finally hard-truncated |
+| `max_calls_per_report` | `12` | Call cap for one report (repair rounds included); going over degrades immediately |
+| `temperature` | `0.2` | Low temperature, to keep the narrative from drifting |
 
-换成通义、智谱、硅基流动或本地 Ollama，只改 `base_url` 与 `model`。
+To switch to Qwen, Zhipu, SiliconFlow or a local Ollama, change only `base_url` and `model`.
 
-## 日报 `report`
+## Daily report `report`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `trigger_hour` | `21` | 每晚几点出报。改完必须重新注册计划任务 |
-| `catchup_days` | `7` | 开机后最多补几天漏报 |
-| `min_active_minutes` | `20` | 有观测但活跃不足时生成空日说明；完全无观测则跳过 |
-| `open_browser` | `true` | 出报后是否弹看板。自动出报**仅终版弹**（21:00 首版与晚间增量更新不弹，一次补多天也只弹最新那天）；手动 `report` 每次生成都弹，`--no-open` 可禁。**这不是外发审批**，禁止外发请用 `privacy.allow_llm` |
-| `review_mode` | `false` | `true` 时先把待发内容落盘，确认后才真正外发 |
-| `max_upgrade_attempts` | `3` | 降级日报最多自动升级几次，防止断网时反复调用 |
-| `degraded_retry_hours` | `12` | 降级日报在这个时间窗内才允许自动重试升级 |
-| `gap_threshold_min` | `10` | 间隔超过 10 分钟断块 |
-| `max_block_min` | `30` | 单块最长 30 分钟 |
-| `max_session_min` | `60` | 行为段最长 60 分钟 |
-| `refresh_gap_min` | `90` | 已出报后至少再过这么久才允许增量更新 |
+| `trigger_hour` | `21` | What hour to generate the report. Re-register the scheduled task after changing it |
+| `catchup_days` | `7` | How many missed days to catch up on after boot |
+| `min_active_minutes` | `20` | With observations but too little activity, generate an empty-day note; with no observations at all, skip |
+| `open_browser` | `true` | Whether to open the dashboard after generating. Automatic generation opens it **only for the final version** (the 21:00 first version and evening incremental updates do not, and a catch-up covering several days opens only the most recent); the manual `report` command opens it on every run, `--no-open` disables that. **This is not outbound approval** — to forbid outbound calls use `privacy.allow_llm` |
+| `review_mode` | `false` | With `true`, the pending content is written to disk first and only sent after you confirm |
+| `max_upgrade_attempts` | `3` | How many times a degraded report may be upgraded automatically, to avoid repeated calls while offline |
+| `degraded_retry_hours` | `12` | A degraded report may only be retried automatically within this window |
+| `gap_threshold_min` | `10` | A gap longer than 10 minutes breaks the block |
+| `max_block_min` | `30` | Maximum length of a single block: 30 minutes |
+| `max_session_min` | `60` | Maximum length of a behavior segment: 60 minutes |
+| `refresh_gap_min` | `90` | After a report exists, at least this long must pass before an incremental update is allowed |
 
-## 文档引用 `refs` 与笔记同步 `obsidian`
+## Document references `refs` and note sync `obsidian`
 
-| 键 | 默认 | 说明 |
+| Key | Default | Description |
 | --- | --- | --- |
-| `refs.enabled` | `true` | 是否解析文档引用 |
-| `refs.providers` | `[local_file, obsidian, url]` | 启用的解析器；`kb` 已注册但默认不启用 |
-| `refs.allow_unresolved_links` | `false` | 文件不存在就不生成链接，避免死链 |
-| `refs.cache_ttl_days` | `30` | 解析结果缓存天数 |
-| `refs.resolve_timeout_sec` | `15` | 单次解析超时 |
-| `refs.search_roots` | `[]` | 自动解析时搜索的目录；空则只认绝对路径 |
-| `refs.vault_dir` / `vault_name` | `""` | Obsidian 库位置与显示名 |
-| `refs.kb.*` | 关闭 | 知识库预留项，当前为空实现 |
-| `obsidian.enabled` / `vault_dir` | `false` / `""` | 日报同步到笔记库 |
+| `refs.enabled` | `true` | Whether to resolve document references |
+| `refs.providers` | `[local_file, obsidian, url]` | Enabled resolvers; `kb` is registered but off by default |
+| `refs.allow_unresolved_links` | `false` | No link when the file does not exist, to avoid dead links |
+| `refs.cache_ttl_days` | `30` | Days to cache resolution results |
+| `refs.resolve_timeout_sec` | `15` | Timeout for a single resolution |
+| `refs.search_roots` | `[]` | Directories searched during automatic resolution; when empty only absolute paths are recognized |
+| `refs.vault_dir` / `vault_name` | `""` | Obsidian vault location and display name |
+| `refs.kb.*` | off | Reserved knowledge-base settings, currently an empty implementation |
+| `obsidian.enabled` / `vault_dir` | `false` / `""` | Sync daily reports into the note vault |
 
-## 配置失效
+## Invalid configuration
 
-无效 YAML、已知字段类型错误（例如把布尔写成字符串 `"false"`）或非法隐私正则，会让程序**停止内容采集与外发**，而不是静默退回默认值：
+Invalid YAML, a wrong type on a known field (for example a boolean written as the string `"false"`), or an invalid privacy regex makes the program **stop content capture and outbound calls** rather than silently falling back to defaults:
 
-- 界面与 `doctor` 显示具体原因，`status` 的 JSON 里带 `privacy_error`；
-- 不会覆盖你损坏的原配置；
-- 已有运行数据却缺少配置文件时，拒绝自动重建默认值，避免"看起来一切正常、其实换了套配置"。
+- the UI and `doctor` show the specific reason, and `status` carries `privacy_error` in its JSON;
+- your broken config is never overwritten;
+- when runtime data exists but the config file is missing, it refuses to recreate defaults — so it never "looks fine" while actually running on a different configuration.
 
-保存前会先校验、再单文件原子替换，所以不会写到一半坏掉。
+Saving validates first and then atomically replaces the single file, so it never ends up half-written.
 
-## 常见调整
+## Common tweaks
 
 ```yaml
-# 换一个模型服务
+# switch model provider
 llm:
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   model: "qwen-plus"
 
-# 改成 22:00 出报（改完必须重注册计划任务）
+# generate at 22:00 instead (re-register the scheduled task after changing it)
 report:
   trigger_hour: 22
 
-# 只看得见当前窗口，绝不抓全屏（默认值，显式写出来更放心）
+# see the active window only, never capture the full screen (the default; writing it out is reassuring)
 privacy:
   capture_scope: active_window
 
-# 完全不外发，只用本地时间线
+# no outbound calls at all, local timeline only
 privacy:
   allow_llm: false
 
-# 先审后发
+# review before sending
 report:
   review_mode: true
 
-# 截图只留 3 天，事件留 14 天
+# keep screenshots for 3 days, events for 14
 retention:
   shots_days: 3
   events_days: 14
 ```
 
-改出报钟点后要重新注册，因为计划任务的触发时刻是注册时写进系统的：
+Re-register after changing the report hour, because the scheduled task's trigger time is written into the system at registration:
 
 ```bat
 What-IDid.exe autostart --remove

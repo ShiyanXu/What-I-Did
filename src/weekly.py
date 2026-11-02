@@ -9,13 +9,15 @@
 """
 from __future__ import annotations
 
+from i18n import join_list, t, tn
+
 import json
 from datetime import timedelta
 
 import paths
 import timeutil
 
-WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 _MAX_ITEMS = 40          # 单类条目上限，避免一周刷出几百条把汇总淹掉
 
 
@@ -37,9 +39,9 @@ def week_range(anchor: str | None = None, cfg=None) -> tuple[str, str]:
 def _days_between(start: str, end: str) -> list[str]:
     lo, hi = timeutil.parse_day(start), timeutil.parse_day(end)
     if hi < lo:
-        raise ValueError("结束日期早于开始日期")
+        raise ValueError(t("End date is earlier than start date"))
     if (hi - lo).days > 62:
-        raise ValueError("汇总区间最多 62 天，更长请分次")
+        raise ValueError(t("A summary can span at most 62 days; split longer ranges"))
     out, cur = [], lo
     while cur <= hi:
         out.append(cur.strftime("%Y-%m-%d"))
@@ -110,14 +112,15 @@ def collect(start: str, end: str, cfg=None) -> dict:
         if data is None:
             has_events = paths.events_path(day).exists() and paths.events_path(day).stat().st_size > 40
             rows.append({"day": day, "status": "missing", "active_minutes": 0,
-                         "block_count": 0, "headline": "有采集记录但还没出报" if has_events else "无记录"})
+                         "block_count": 0,
+                         "headline": t("Captured, but no report yet") if has_events else t("No records")})
             if has_events:
                 missing.append(day)
             continue
         if data.get("_broken"):
             broken.append(day)
             rows.append({"day": day, "status": "broken", "active_minutes": 0,
-                         "block_count": 0, "headline": "日报文件损坏"})
+                         "block_count": 0, "headline": t("Report file is corrupted")})
             continue
 
         rep = data.get("report") or {}
@@ -171,51 +174,59 @@ def collect(start: str, end: str, cfg=None) -> dict:
 def _hm(minutes: float) -> str:
     total = int(round(minutes))
     h, m = divmod(total, 60)
-    return f"{h} 小时 {m} 分" if h else f"{m} 分钟"
+    return f"{h}{t(' h')} {m}{t(' min')}" if h else f"{m}{t(' min')}"
 
 
 def render_md(data: dict, cat_label: dict | None = None) -> str:
     """渲染成 Markdown。统计口径与日报一致：都按"有效活动"。"""
     labels = cat_label or {}
     start, end = data["start"], data["end"]
-    lines = [f"# {start} – {end} 工作周汇总", ""]
+    lines = [t("# {start} – {end} weekly summary", start=start, end=end), ""]
 
     # ---- 概览
-    lines.append("## 这周概览")
+    lines.append(t("## This week at a glance"))
     lines.append("")
-    bits = [f"有日报 {data['counted_days']} 天"]
+    bits = [tn(data["counted_days"], "{n} day with a report", "{n} days with a report")]
     if data["total_minutes"]:
-        bits.append(f"有效活动合计 {_hm(data['total_minutes'])}")
-        bits.append(f"日均 {_hm(data['daily_avg_minutes'])}")
+        bits.append(t("Active time totals {dur}", dur=_hm(data["total_minutes"])))
+        bits.append(t("Daily average {dur}", dur=_hm(data["daily_avg_minutes"])))
     if data["total_blocks"]:
-        bits.append(f"{data['total_blocks']} 个活动块")
-    lines.append("- " + "，".join(bits))
+        bits.append(t("{n} activity blocks", n=data["total_blocks"]))
+    lines.append("- " + join_list(bits))
     if data["degraded"]:
-        lines.append(f"- 其中 {len(data['degraded'])} 天是降级时间线版（模型未参与），叙述可信度低")
+        lines.append(t("- {n} of them are the degraded timeline version (model not involved); "
+                       "the narrative is less reliable", n=len(data["degraded"])))
     if data["missing"]:
-        lines.append(f"- 缺报 {len(data['missing'])} 天：{'、'.join(data['missing'])}")
+        lines.append(tn(len(data["missing"]),
+                        "- {n} day without a report: {days}",
+                        "- {n} days without a report: {days}",
+                        days=join_list(data["missing"])))
     if data["broken"]:
-        lines.append(f"- 文件损坏 {len(data['broken'])} 天：{'、'.join(data['broken'])}")
+        lines.append(tn(len(data["broken"]),
+                        "- {n} day with a corrupted file: {days}",
+                        "- {n} days with a corrupted file: {days}",
+                        days=join_list(data["broken"])))
     if data["by_category"]:
-        cats = "、".join(f"{labels.get(k, k)} {_hm(v)}" for k, v in data["by_category"].items())
-        lines.append(f"- 时间分布：{cats}")
+        cats = join_list(f"{labels.get(k, k)} {_hm(v)}" for k, v in data["by_category"].items())
+        lines.append(t("- Time breakdown: {cats}", cats=cats))
     if data["by_app"]:
-        apps = "、".join(f"{k} {_hm(v)}" for k, v in data["by_app"].items())
-        lines.append(f"- 主要应用：{apps}")
+        apps = join_list(f"{k} {_hm(v)}" for k, v in data["by_app"].items())
+        lines.append(t("- Top apps: {apps}", apps=apps))
     lines.append("")
 
     # ---- 每日
-    lines.append("## 每日一览")
+    lines.append(t("## Day by day"))
     lines.append("")
-    lines.append("| 日期 | 星期 | 有效活动 | 块 | 状态 | 标题 |")
+    lines.append(t("| Date | Weekday | Active time | Blocks | Status | Headline |"))
     lines.append("|---|---|---|---|---|---|")
     for row in data["rows"]:
         try:
-            wd = WEEKDAYS[timeutil.parse_day(row["day"]).weekday()]
+            wd = t(WEEKDAYS[timeutil.parse_day(row["day"]).weekday()])
         except Exception:
             wd = ""
-        status = {"ok": "模型", "degraded": "时间线", "empty": "空日",
-                  "missing": "缺报", "broken": "损坏"}.get(row["status"], row["status"] or "-")
+        status = {"ok": t("Model"), "degraded": t("Timeline"), "empty": t("Empty day"),
+                  "missing": t("Missing"), "broken": t("Broken")}.get(
+                      row["status"], row["status"] or "-")
         head = (row.get("headline") or "").replace("|", "／")[:60]
         lines.append(f"| {row['day']} | {wd} | {_hm(row['active_minutes']) if row['active_minutes'] else '-'} | "
                      f"{row['block_count'] or '-'} | {status} | {head} |")
@@ -223,27 +234,34 @@ def render_md(data: dict, cat_label: dict | None = None) -> str:
 
     # ---- 进展 / 卡点
     for title, items, hint in (
-        ("今日成果", data["highlights"], "全部摘自当天日报，未逐条复核"),
-        ("反复出现的卡点", data["friction"], "出现两次以上才值得改流程"),
-        ("未完成，下周继续", data["pending"], "来自日报里的进行中与卡住项"),
-        ("下周可以安排", data["tomorrow"], "来自每天给的明日建议，已去重"),
+        (t("Today's wins"), data["highlights"],
+         t("All taken from that day's report; not reviewed one by one")),
+        (t("Recurring friction"), data["friction"],
+         t("Only worth changing the process when it shows up twice or more")),
+        (t("Unfinished, continue next week"), data["pending"],
+         t("From the in-progress and blocked items in the reports")),
+        (t("Could be scheduled next week"), data["tomorrow"],
+         t("From each day's suggestions for tomorrow, deduplicated")),
     ):
         if not items:
             continue
-        lines.append(f"## {title}")
+        lines.append(t("## {title}", title=title))
         lines.append("")
         for item in items:
             lines.append(f"- {item}")
         lines.append("")
-        lines.append(f"> {hint}")
+        lines.append(t("> {hint}", hint=hint))
         lines.append("")
 
     # ---- 口径说明
-    lines.append("## 数据说明")
+    lines.append(t("## About the numbers"))
     lines.append("")
-    lines.append("- 「有效活动」= 活动块的墙钟跨度扣除暂停/锁屏/屏蔽区间，是本机观测口径，不等于实际工作投入。")
-    lines.append("- 屏幕记录只能证明「看过、操作过」，不能反证「没产出」；静坐与阅读都可能被算成低活跃。")
-    lines.append("- 周汇总只聚合已生成的日报；想补某天的内容，先对那天重新生成日报再汇总。")
+    lines.append(t("- \"Active time\" is the wall-clock span of activity blocks minus paused, "
+                   "locked and blocked intervals. It is a local measurement, not real work effort."))
+    lines.append(t("- Screen records only prove that something was viewed or operated, never "
+                   "that nothing was produced; sitting and reading can both look like low activity."))
+    lines.append(t("- A weekly summary only aggregates reports that already exist; to fill in "
+                   "a missing day, regenerate that day's report first, then summarize again."))
     lines.append("")
     return "\n".join(lines)
 
@@ -263,14 +281,14 @@ def weekly(anchor: str | None = None, cfg=None, out: str | None = None,
         cfg = cfgmod.load()
     if start or end:
         if not (start and end):
-            raise ValueError("start 与 end 需要同时给出")
+            raise ValueError(t("start and end must be given together"))
         for value in (start, end):
             if not isinstance(value, str) or len(value) != 10:
-                raise ValueError("日期格式应为 YYYY-MM-DD")
+                raise ValueError(t("Date must be YYYY-MM-DD"))
             try:
                 timeutil.parse_day(value)
             except ValueError as exc:
-                raise ValueError(f"日期格式应为 YYYY-MM-DD，收到「{value}」") from exc
+                raise ValueError(t("Date must be YYYY-MM-DD, got \"{value}\"", value=value)) from exc
     else:
         start, end = week_range(anchor, cfg)
 
@@ -281,13 +299,13 @@ def weekly(anchor: str | None = None, cfg=None, out: str | None = None,
     if out:
         raw = str(out).strip()
         if not raw:
-            raise ValueError("输出名不能为空")
+            raise ValueError(t("Output name cannot be empty"))
         target = Path(raw) if raw.lower().endswith(".md") and Path(raw).is_absolute() else base / (
             raw if raw.lower().endswith(".md") else f"{raw}.md")
         try:
             target.resolve().relative_to(paths.REPORTS.resolve())
         except ValueError as exc:
-            raise ValueError("周汇总只能写到 reports 目录内") from exc
+            raise ValueError(t("The weekly summary can only be written inside the reports folder")) from exc
     else:
         target = base / f"{start}_{end}.md"
 
@@ -299,10 +317,10 @@ def weekly(anchor: str | None = None, cfg=None, out: str | None = None,
 
 
 def blocks_label() -> dict:
-    """分类中文名从 blocks 模块取，保持与日报/看板同一套说法。"""
+    """分类显示名从 render 取，保持与日报/看板同一套说法，且跟随当前语言。"""
     try:
-        import blocks as blocks_mod
+        import render as render_mod
 
-        return blocks_mod.CATEGORY_LABEL
+        return {key: render_mod.cat_name(key) for key in render_mod.CAT_NAME}
     except Exception:
         return {}

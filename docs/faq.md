@@ -1,128 +1,130 @@
-# 常见问题
+# FAQ
 
-## 安装与启动
+> [简体中文](faq.zh-CN.md) · **English**
 
-**双击提示"Windows 已保护你的电脑"**
-exe 没有代码签名，这是 SmartScreen 的默认反应。点「更多信息」→「仍要运行」。企业环境里若杀软误报（PyInstaller 打包的程序偶发），把整个文件夹加入白名单。
+## Install and startup
 
-**双击没反应，或者一闪就没**
-先看有没有黑窗闪一下——那通常是启动即崩。用命令行跑一次 `What-IDid.exe doctor` 看输出；必要时看 `logs\` 下的日志。
+**Double-clicking shows "Windows protected your PC"**
+The exe is not code-signed, and that is SmartScreen's default reaction. Click "More info" → "Run anyway". If corporate antivirus flags it (which happens occasionally with PyInstaller builds), whitelist the whole folder.
 
-**重复双击会开一堆窗口吗**
-不会。程序会把已经收在托盘里的那个窗口叫出来。
+**Double-clicking does nothing, or the window flashes and disappears**
+First check whether a black window flashed — that usually means it crashed on startup. Run `What-IDid.exe doctor` from the command line and read the output; check the logs under `logs\` if you need to.
 
-**点 × 之后程序还在跑**
-这是有意的：关窗口只把界面收进托盘，采集继续。要真正退出，右键托盘图标 →「退出（停止采集）」。
+**Does double-clicking again open a pile of windows**
+No. It brings back the window that is already sitting in the tray.
 
-**任务栏右下角找不到图标**
-Windows 10/11 默认把新图标放进「^」溢出区，点一下展开就能看到。把它拖到常驻区之后就一直在外面。
+**The program is still running after I click ×**
+That is deliberate: closing the window only hides the UI in the tray and capture continues. To really quit, right-click the tray icon → "Quit (stop capture)".
 
-## 采集
+**I cannot find the icon in the notification area**
+Windows 10/11 puts new icons in the "^" overflow area by default; click once to expand it. Drag the icon onto the resident area and it stays out there.
 
-**概览页一直显示"采集没有在运行"**
-点「开始采集」。也可以 `What-IDid.exe start`，然后 `What-IDid.exe status` 看心跳。
+## Capture
 
-**截图全黑 / 全白**
-计划任务被设成了「不管用户是否登录都运行」，进程落在 Session 0，那里没有桌面。删掉任务，用 `What-IDid.exe autostart --install` 重装，确认是「只在用户登录时运行」。
+**The Overview page keeps saying "capture is not running"**
+Click "Start capture". You can also run `What-IDid.exe start` and then `What-IDid.exe status` to check the heartbeat.
 
-**锁屏期间还在记录吗**
-不会。锁屏始终停止采集，配置里的 `capture.pause_on_locked` 只是兼容字段，写 `false` 也绕不过。
+**Screenshots are all black / all white**
+The scheduled task was set to "run whether or not the user is logged on", so the process lands in Session 0, which has no desktop. Delete the task and reinstall it with `What-IDid.exe autostart --install`, making sure it is "run only when the user is logged on".
 
-**想临时不记录（开会、共享屏幕）**
-`What-IDid.exe pause --minutes 60`，或界面「暂停 30 分钟」。恢复用 `resume` 或点按钮。暂停期间只留匿名时间刻度。
+**Does it keep recording while the screen is locked**
+No. The lock screen always stops capture; `capture.pause_on_locked` in the config is only a legacy field, and setting `false` does not get around it.
 
-**某些应用不想被记录**
-设置页的隐私名单，或直接改配置：`privacy.blocked_apps` 完全屏蔽（只留匿名状态），`privacy.skip_ocr_apps` 只记应用与时长。改完重启采集生效。
+**I want it to stop recording for a while (meeting, screen sharing)**
+`What-IDid.exe pause --minutes 60`, or "Pause 30 minutes" in the UI. Resume with `resume` or the button. While paused only anonymous time ticks are kept.
 
-**内存或磁盘占用高**
-把 `capture.interval_sec` 调大、`capture.max_width` 调小、`retention.shots_days` 调短，都能立刻见效。截图是体积大头，`shots_days: 3` 能省不少。
+**There are apps I do not want recorded**
+Use the privacy lists on the Settings page, or edit the config: `privacy.blocked_apps` blocks them completely (only an anonymous state remains), `privacy.skip_ocr_apps` records only the app and duration. Restart capture to apply.
 
-## 出报
+**Memory or disk usage is high**
+Raise `capture.interval_sec`, lower `capture.max_width`, shorten `retention.shots_days` — all take effect immediately. Screenshots are the bulk of the size, and `shots_days: 3` saves a lot.
 
-**到点了没出日报**
-按顺序看三步：
+## Reports
 
-1. `What-IDid.exe status` —— 最后一行会说"该出还没出"还是"已出"；
-2. `What-IDid.exe doctor` —— 「出报定时」看计划任务有没有注册，「出报状态」列出所有待生成的日期；
-3. 都没问题时，概览页顶部会有红色提示「X 的日报还没生成 → 立即生成」。
+**The report did not appear at the scheduled time**
+Check three things in order:
 
-21:00 起的任务每 20 分钟复查一次；晚上没开机，登录后 3 分钟内会补跑。
+1. `What-IDid.exe status` — the last line says whether it is "due but not generated" or "generated";
+2. `What-IDid.exe doctor` — "report schedule" shows whether the scheduled task is registered, "report status" lists every date still waiting to be generated;
+3. If both are fine, the Overview page shows a red banner "the report for X has not been generated → generate now".
 
-**想改出报时间**
-改 `report.trigger_hour`，然后**必须重新注册计划任务**——触发时刻是注册时写进系统的：
+The task runs every 20 minutes from 21:00; if the machine was off in the evening, a catch-up runs within 3 minutes of login.
+
+**I want to change the report time**
+Change `report.trigger_hour`, then **you must re-register the scheduled task** — the trigger time is written into the system at registration:
 
 ```bat
 What-IDid.exe autostart --remove
 What-IDid.exe autostart --install
 ```
 
-**日志里反复出现"等待审核确认"**
-开了 `report.review_mode`。内容已经准备好，只是还没确认：日报页点「审核并发送」，或 `What-IDid.exe review approve`。
+**The log keeps repeating "awaiting review"**
+`report.review_mode` is on. The content is ready, it is just not confirmed yet: click "Review and send" on the report page, or run `What-IDid.exe review approve`.
 
-**日报是"纯时间线版"，没有 AI 写的叙述**
-说明模型没被调用或调用失败。检查：Key 是否填了、`privacy.allow_llm` 是否为 `true`、`config.llm.base_url` 是否能连通（设置页有「测试连接」）。降级版会在 `report.degraded_retry_hours` 内自动重试升级，也可以 `report --force` 手动重跑。
+**The report is a "plain timeline version" with no AI narrative**
+That means the model was not called, or the call failed. Check: is the key filled in, is `privacy.allow_llm` set to `true`, can `config.llm.base_url` be reached (there is a "Test connection" button on the Settings page). A degraded report is upgraded automatically within `report.degraded_retry_hours`, or you can re-run it by hand with `report --force`.
 
-**日报写着"降级"，但网络明明恢复了**
-升级有两个闸门：时间窗 `report.degraded_retry_hours`（默认 12 小时）和次数 `report.max_upgrade_attempts`（默认 3 次）。超过闸门后只能手动 `report --force`。
+**The report says "degraded" even though the network is clearly back**
+Upgrading has two gates: the window `report.degraded_retry_hours` (default 12 hours) and the count `report.max_upgrade_attempts` (default 3). Past the gates, only a manual `report --force` will do it.
 
-**日报里没有具体项目名**
-多半是 OCR 没跑到（配额用完，或窗口被名单跳过）。看 `data\<日期>\ocr.jsonl` 里 `status` 是不是 `ok`。调低 `capture.interval_sec` 或调高 `ocr.max_per_day` 能拿到更多细节，代价是更占资源。
+**The report has no concrete project names**
+Most likely OCR never ran (quota exhausted, or the window was skipped by a list). Check whether `status` is `ok` in `data\<date>\ocr.jsonl`. Lowering `capture.interval_sec` or raising `ocr.max_per_day` gets you more detail at the cost of more resources.
 
-**某天完全没生成日报**
-当天没有任何观测数据时不会生成空日报——这是为了避免首次安装刷出一堆空页。确认那天的 `data\<日期>\events.jsonl` 是否存在。
+**A whole day has no report at all**
+A day with no observations produces no empty report — this is to stop a fresh install from filling the page with blank days. Check whether `data\<date>\events.jsonl` exists for that day.
 
-**日报结论看着对，但证据对不上**
-程序只保证 `block_id` 真实存在，不保证"因为这个块所以这个结论成立"。这是模型的推断问题；如果某段明显记错了，用 `manual override` 改掉那一段，或在「遗忘这天」后重跑。
+**The conclusions look right but the evidence does not match**
+The program only guarantees that `block_id` really exists, not that "this block therefore this conclusion". That is the model's inference. If a segment is clearly misrecorded, relabel it with `manual override`, or "Forget this day" and re-run.
 
-## 识别
+## Recognition
 
-**OCR 一直失败**
-先 `What-IDid.exe ocr-test --screen` 看输出。内置 RapidOCR 没有外部依赖；想更快就装 Umi-OCR，把 `ocr.umi_exe` 填上，并在 Umi 设置里开启 HTTP 服务（默认端口 1224）。
+**OCR keeps failing**
+Start with `What-IDid.exe ocr-test --screen` and read the output. The built-in RapidOCR has no external dependencies; if you want it faster, install Umi-OCR, fill in `ocr.umi_exe`, and enable the HTTP server in Umi's settings (default port 1224).
 
-**识别特别慢**
-内置引擎在 CPU 上跑，大图很吃时间。可以把 `ocr.rapidocr.max_side` 降到 1280，或改用 Umi-OCR。
+**Recognition is very slow**
+The built-in engine runs on the CPU and large images take a lot of time. Lower `ocr.rapidocr.max_side` to 1280, or switch to Umi-OCR.
 
-**识别出来的文字是乱码**
-先把 `ocr.rapidocr.min_score` 提到 0.6 以上，太低置信度的行本来就不该进日报。字体过小或缩放异常时，确认 `ocr.crop_active_window` 是 `true`（用原生分辨率裁剪）。
+**The recognized text is garbled**
+First raise `ocr.rapidocr.min_score` above 0.6 — low-confidence lines should not reach the report anyway. With very small fonts or unusual scaling, check that `ocr.crop_active_window` is `true` (it crops at native resolution).
 
-## 数据与隐私
+## Data and privacy
 
-**数据到底存在哪**
-`status` 里会打印数据目录。默认是程序目录；不可写时是 `%LOCALAPPDATA%\What-IDid`；设了 `WID_HOME` 就在那里。
+**Where is the data actually stored**
+`status` prints the data directory. It is the program directory by default; `%LOCALAPPDATA%\What-IDid` when that is not writable; wherever `WID_HOME` points if it is set.
 
-**怎么确认它没把图片传出去**
-图片不上传是这个程序的设计前提：OCR 全在本地，模型请求里只有文本。想彻底切断外发，把 `privacy.allow_llm` 设为 `false`，或保持审核模式不确认。也可以直接看 `logs\` 里的出报日志与 `reports\<日期>.json` 的 `meta`。
+**How do I confirm it does not upload my images**
+Images never being uploaded is a design premise of the program: OCR is entirely local and model requests contain text only. To cut outbound calls entirely, set `privacy.allow_llm` to `false`, or stay in review mode without confirming. You can also read the report logs under `logs\` and `meta` in `reports\<date>.json` yourself.
 
-**记到了不该记的内容**
-`What-IDid.exe forget --minutes 30` 删掉最近半小时，`forget --day` 删一整天。删除不可逆，也无法撤回已经发给模型服务的部分。
+**It recorded something it should not have**
+`What-IDid.exe forget --minutes 30` deletes the last half hour, `forget --day` deletes a whole day. Deletion is irreversible, and it cannot recall what has already been sent to a model provider.
 
-**磁盘越来越满**
-`clean --dry-run` 看会删什么，再去掉 `--dry-run` 执行。注意清理由采集进程负责，采集没在跑就不会自动清理。
+**The disk keeps filling up**
+Run `clean --dry-run` to see what would be deleted, then drop `--dry-run` to do it. Note that cleanup is the capture process's job: with capture not running, nothing is cleaned up automatically.
 
-## 迁移与卸载
+## Migration and uninstall
 
-**换电脑**
-拷整个文件夹，双击运行，向导会重新注册自启。`data\`、`reports\`、`web\` 一起拷过去就能接着看历史。
+**New machine**
+Copy the whole folder over and double-click; the wizard re-registers start at login. Copy `data\`, `reports\` and `web\` together and the history comes along.
 
-**想换个地方存数据**
-设环境变量 `WID_HOME=D:\MyWorkLog`。注意它不会自动搬迁已有数据，要先手动拷过去再启动。
+**I want the data somewhere else**
+Set the `WID_HOME=D:\MyWorkLog` environment variable. Note that it does not migrate existing data — copy that first, then start.
 
-**彻底卸载**
+**Full uninstall**
 
 ```bat
 What-IDid.exe stop
 What-IDid.exe autostart --remove
 ```
 
-然后删掉整个文件夹。若数据在 `%LOCALAPPDATA%\What-IDid`，连它一起删。
+Then delete the whole folder. If the data lives in `%LOCALAPPDATA%\What-IDid`, delete that as well.
 
-**仓库里的 2026-10-18 是什么数据**
-`scripts\dev_fixture.py` 造的演示数据，页面上也有标注。删除：`python scripts\dev_fixture.py --day 2026-10-18 --clean`。
+**What is the 2026-10-18 data in the repository**
+Demo data produced by `scripts\dev_fixture.py`, marked as such on the page. To delete it: `python scripts\dev_fixture.py --day 2026-10-18 --clean`.
 
-## 边界
+## Limits
 
-- 观测时长不是工时：阅读、看课、会议这类没有输入的活动会被算成低活跃。
-- 引用校验不等于结论真实：`block_id` 真实存在，不代表因果关系成立。
-- 整屏模式会包含副屏与后台窗口；应用名单只判断前台。
-- 目前只支持 Windows 10/11 x64，32 位与 Windows 7 不支持。
-- 多屏不同缩放比例的场景尚未充分验证；坐标空间不一致时程序会跳过该帧，最坏是少记几条，不会存错位的图。
+- Observed duration is not working time: activities without input such as reading, watching lectures or meetings count as low activity.
+- Reference validation is not truth: a real `block_id` does not mean the causal claim holds.
+- Full-screen mode includes secondary displays and background windows; the app lists only judge the foreground app.
+- Only Windows 10/11 x64 is supported; 32-bit and Windows 7 are not.
+- Multi-monitor setups with mixed scaling have not been thoroughly validated; when coordinate spaces disagree the program skips that frame, and the worst case is a few missing records rather than misaligned images.

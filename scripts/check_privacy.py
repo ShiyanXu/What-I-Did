@@ -264,7 +264,10 @@ def test_invalid_config(tmp: Path) -> None:
         cfgmod.paths.CONFIG_PATH.write_text(
             "privacy:\n  blocked_title_patterns: ['(']\n", encoding="utf-8")
         cfg2 = cfgmod.load(reload=True)
-        check(bool(cfg2.error) and "正则" in cfg2.error, "非法隐私正则使配置失效",
+        # 提示语跟着界面语言走，中英都要认
+        msg = str(cfg2.error or "")
+        check(bool(msg) and ("正则" in msg or "regex" in msg.lower()),
+              "非法隐私正则使配置失效",
               cfg2.error)
     finally:
         cfgmod.paths.CONFIG_PATH = original

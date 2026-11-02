@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+from i18n import join_list, t
+
 import json
 import re
 from datetime import timedelta
@@ -20,7 +22,8 @@ import paths
 import timeutil
 
 KINDS = ("title", "ocr", "report")
-KIND_LABEL = {"title": "窗口标题", "ocr": "屏幕文字", "report": "日报"}
+#: 命中类型 -> 英文显示名；显示时再走 t()，模块级不能提前取词。
+KIND_LABEL = {"title": "Window title", "ocr": "Screen text", "report": "Daily report"}
 MAX_HITS_PER_DAY = 30      # 单日命中上限：避免一个高频词把整天记录刷满
 SNIPPET_WIDTH = 72
 
@@ -156,13 +159,14 @@ def _report_blobs(data: dict) -> list[tuple[str, str]]:
     """把日报里可检索的正文摊成 (字段名, 文本)。缺字段按空处理。"""
     rep = data.get("report") or {}
     out: list[tuple[str, str]] = []
-    for key, label in (("headline", "标题"), ("opening_md", "开场"),
-                       ("summary_md", "过程"), ("notes_for_human", "备注")):
+    for key, label in (("headline", t("Headline")), ("opening_md", t("Opening")),
+                       ("summary_md", t("Process")), ("notes_for_human", t("Notes"))):
         val = rep.get(key)
         if isinstance(val, str) and val:
             out.append((label, val))
-    for key, label in (("highlights", "成果"), ("followups", "待办"),
-                       ("friction", "卡点"), ("insight", "洞察"), ("tomorrow", "明日")):
+    for key, label in (("highlights", t("Wins")), ("followups", t("To-dos")),
+                       ("friction", t("Blockers")), ("insight", t("Insights")),
+                       ("tomorrow", t("Tomorrow"))):
         for it in rep.get(key) or []:
             if isinstance(it, dict):
                 text = " ".join(str(v) for v in it.values() if isinstance(v, (str, int, float)))
@@ -172,7 +176,8 @@ def _report_blobs(data: dict) -> list[tuple[str, str]]:
                 out.append((label, text))
     for it in rep.get("behaviors") or []:
         if isinstance(it, dict) and (it.get("label") or it.get("detail")):
-            out.append(("行为", f"{it.get('label', '')} {it.get('detail', '')}".strip()))
+            out.append((t("Behavior"),
+                        f"{it.get('label', '')} {it.get('detail', '')}".strip()))
     return out
 
 
@@ -212,18 +217,18 @@ def search(raw_keywords, days: int = 14, cfg=None, limit: int = 200,
     """
     keywords = parse_keywords(raw_keywords)
     if not keywords:
-        raise ValueError("至少给一个关键词")
+        raise ValueError(t("Give at least one keyword"))
     if cfg is None:
         import config as cfgmod
 
         cfg = cfgmod.load()
     days = int(days)
     if days < 1 or days > 365:
-        raise ValueError("days 应在 1–365 之间")
+        raise ValueError(t("days must be between 1 and 365"))
     limit = max(1, int(limit))
     unknown = [k for k in kinds if k not in KINDS]
     if unknown:
-        raise ValueError(f"未知检索范围：{'、'.join(unknown)}")
+        raise ValueError(t("Unknown search scope: {kinds}", kinds=join_list(unknown)))
 
     hits: list[dict] = []
     scanned = {"days": 0, "events": 0, "ocr": 0, "reports": 0}
@@ -267,24 +272,29 @@ def search(raw_keywords, days: int = 14, cfg=None, limit: int = 200,
 
 def render_text(result: dict) -> str:
     """给命令行看的纯文本结果。"""
-    keys = "、".join(result.get("keywords") or [])
-    lines = [f"检索：{keys}　范围：最近 {result.get('days', 0)} 天　命中 {result.get('count', 0)} 条"]
+    keys = join_list(result.get("keywords") or [])
+    lines = [t("Search: {keys} · scope: last {days} days · {count} hits",
+               keys=keys, days=result.get("days", 0), count=result.get("count", 0))]
     if not result.get("hits"):
         lines.append("")
-        lines.append("没有命中。可能的原因：关键词拼写不同、保留期已过、或那段时间没有采集。")
-        lines.append(f"扫描量：{result['scanned']['days']} 天 / 事件 {result['scanned']['events']} 行 / "
-                     f"OCR {result['scanned']['ocr']} 行 / 日报 {result['scanned']['reports']} 份")
+        lines.append(t("No hits. Possible reasons: the keyword is spelled differently, "
+                       "the retention period has passed, or nothing was captured then."))
+        lines.append(t("Scanned {days} days / {events} event lines / {ocr} OCR lines / "
+                       "{reports} reports",
+                       days=result["scanned"]["days"], events=result["scanned"]["events"],
+                       ocr=result["scanned"]["ocr"], reports=result["scanned"]["reports"]))
         return "\n".join(lines)
     for block in result.get("by_day") or []:
         lines.append("")
-        lines.append(f"## {block['day']}（{len(block['hits'])} 条）")
+        lines.append(t("## {day} ({n} hits)", day=block["day"], n=len(block["hits"])))
         for hit in block["hits"]:
-            head = f"- {hit['at'] or '--:--'}　[{KIND_LABEL.get(hit['kind'], hit['kind'])}]"
+            head = f"- {hit['at'] or '--:--'}　[{t(KIND_LABEL.get(hit['kind'], hit['kind']))}]"
             if hit.get("app") and hit["kind"] == "title":
                 head += f" {hit['app']}"
             lines.append(head)
             lines.append(f"  {hit['snippet']}")
     if result.get("truncated"):
         lines.append("")
-        lines.append("（结果已截断，缩小关键词或减少天数可以看得更细）")
+        lines.append(t("(Results truncated; use fewer keywords or a shorter range "
+                       "to see more detail)"))
     return "\n".join(lines)

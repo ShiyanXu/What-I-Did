@@ -88,7 +88,7 @@ There is a single window with four pages:
 | --- | --- |
 | **Overview** | Capture status, today's activity volume, free disk space; start / stop / pause / report now; today's behavior timeline; the last 14 days of activity (click a bar to jump to that day's report) |
 | **Reports** | Dates on the left, report body on the right: today's outcomes (status, result, why it matters, next step), follow-ups and blockers, work mainline, time split, blockers and cost, insights; evidence (raw blocks, screenshots, OCR, all documents, gaps) stays collapsed in the appendix; copy the Markdown, regenerate, open the full dashboard, add a manual entry, forget this day |
-| **Settings** | Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, report time and pre-send review, retention, privacy lists, start at login |
+| **Settings** | Model endpoint and key, display language, outbound switch, capture scope, sampling interval, OCR engine, report time and pre-send review, retention, privacy lists, start at login |
 | **Diagnostics** | One-click self-check, live OCR test, cleanup preview, open logs and data directory |
 
 The UI only "looks" and "manages": capture is handled by a separate background process, status refreshes every 3 seconds (15 seconds once minimised to the tray), every slow operation runs on a background thread, and buttons never freeze the window. Saving settings rewrites only the relevant line in `config.yaml`, preserving comments and formatting.
@@ -156,6 +156,9 @@ There is exactly one config file, `config.yaml` (created from `config.default.ya
 Common tweaks:
 
 ```yaml
+ui:
+  language: en              # en / zh-CN / auto (follow the system); WID_LANG overrides
+
 llm:
   base_url: "https://api.deepseek.com/v1"   # any compatible endpoint: Qwen, Zhipu, SiliconFlow, local Ollama
   model: "deepseek-chat"
@@ -167,6 +170,8 @@ report:
 privacy:
   capture_scope: active_window   # set to all_screens explicitly if you need the full screen
 ```
+
+`ui.language` decides the language of the window and of the report headings and labels — `en` by default, `auto` to follow the Windows UI language, and the `WID_LANG` environment variable overrides it for scripts and self-tests. Untranslated strings fall back to English. The report body follows whatever language the model writes in.
 
 **A broken config is never silently reset to defaults**: the program stops content capture and outbound calls, explains why in the UI and in `doctor`, and waits for you to fix it. Per-key reference: [configuration](docs/configuration.md).
 
@@ -210,7 +215,7 @@ docs/                   Documentation
 | [Building and testing](docs/building.md) | Running from source, self-test scripts, packaging, common pitfalls |
 | [FAQ](docs/faq.md) | Common questions and troubleshooting paths |
 
-The detailed documents under `docs/` are currently written in Chinese.
+Every document under `docs/` is available in English and in Simplified Chinese; each page links to its counterpart at the top.
 
 ## Known limitations
 

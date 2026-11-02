@@ -1,17 +1,107 @@
-# 变更记录
+# Changelog · 变更记录
+
+This file records **user-visible behaviour changes**, not internal refactors. The version
+number matches `VERSION` in `src/gui.py`.
+
+`publish.py` copies the current version's section into `release/v<版本>/RELEASE_NOTES.md`,
+so the text below appears verbatim in the GitHub Release body — write it for the people
+downloading the build, not for yourself.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); sections are
+`Added / Changed / Fixed / Removed`. Every release section carries English first, then
+Chinese (`### English` / `### 中文`).
+
+---
 
 本文件记录**用户可见的行为变化**，不记录内部重构。版本号与 `src/gui.py` 的 `VERSION` 保持一致。
 
 发布时 `publish.py` 会截取当前版本段落，拼进 `release/v<版本>/RELEASE_NOTES.md`，
 所以这里的文字会原样出现在 GitHub Release 正文里——写给下载的人看，不是写给自己看的。
 
-格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `新增 / 变更 / 修复 / 移除`。
+格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
+每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
-## [v1.1.2] - 2026-11-02
+## [v1.2] - 2026-11-03
 
-这一版修两个「东西会悄悄不见」的问题：一是当天终版可能丢，二是重启后采集不会自己回来。
+### English
 
-### 修复
+English is the default now, with a language switch in Settings. The window and the report
+skeleton (headings, badges, metric labels, empty states) follow that setting; the text the
+model writes keeps whatever language the model produces. Every public document also ships
+an English file plus a `.zh-CN` sibling.
+
+#### Added
+
+- **English by default.** Every string in the window, the CLI and the report skeleton is
+  English. `config.yaml` gains `ui.language: en`; existing installs keep their data.
+- **Language switch.** Settings → Language → Display language offers `English` and
+  `简体中文`. Saving rebuilds the whole window, so no half-translated layout is left behind.
+- **A new language is one file.** Copy `src/i18n_zh_cn.py` to `i18n_<code>.py`, translate
+  the values, register the code in `i18n.LOCALES`. A missing key falls back to English
+  instead of showing a key or a blank.
+- **`WID_LANG` environment variable** overrides the configured language, for scripts and
+  one-off runs (`WID_LANG=zh-CN`).
+- **Bilingual documentation.** `docs/*.md` plus `docs/*.zh-CN.md`; `CONTRIBUTING` and
+  `SECURITY` the same way. This changelog and every release note carry an English section
+  followed by a Chinese one.
+
+#### Changed
+
+- **Report reason labels are stable codes** (`auto` / `manual` / `catchup` / `finalize`).
+  The badge on the day page used to fall back to a raw, untranslated string whenever it did
+  not recognise the value.
+- **`build.spec` collects `src/i18n*.py` automatically**, so a language module added later
+  cannot be silently left out of the portable build.
+- Date, duration and weekday formats follow the language (`Oct 18` / `10 月 18 日`).
+
+#### Fixed
+
+Carried over from the unpublished v1.1.2:
+
+- **The 04:00 final report is no longer lost.** Cleanup sometimes took the "report is being
+  written" lock in the same tick that spawned the report. The report now waits up to ten
+  seconds before giving up, and cleanup runs before the report is started.
+- **Automatic retries are counted by progress, not by attempts.** The old counter treated
+  the 90-minute incremental updates as failures, so by 04:00 the day had no attempts left.
+  The counter now resets whenever a new revision lands, and a final report keeps retrying on
+  an hourly back-off even after the quota is used up.
+- **An older missed day is no longer starved by a newer one.** When the newest day ran out
+  of quota, earlier days still waiting for a final report were blocked with it. Each day is
+  now checked on its own.
+- **Autostart registers even where `schtasks` is blocked.** Some security policies refuse to
+  execute `schtasks.exe`, so the task was never created and capture never came back after a
+  reboot. Registration now goes through `Register-ScheduledTask` (RPC only) and falls back
+  to `schtasks`; delete and query work the same way.
+
+### 中文
+
+默认语言改为英文，设置里可以切回中文。界面与日报骨架（标题、徽章、指标名、空状态）
+跟随该设置；模型生成的正文保持模型自己给出的语言。所有公开文档都配了英文版与
+`.zh-CN` 版本。
+
+#### 新增
+
+- **默认英文**：界面、命令行、日报骨架的文案全部改成英文。`config.yaml` 增加
+  `ui.language: en`，已有安装的数据不受影响。
+- **语言切换**：设置 → 语言 → 显示语言，可选 `English` 与 `简体中文`。保存后整窗重建，
+  不会留下半中半英的排版。
+- **加一门语言只要一个文件**：把 `src/i18n_zh_cn.py` 复制成 `i18n_<代码>.py`，
+  翻译右边的值，再到 `i18n.LOCALES` 里登记一行。漏翻的词条回落英文，
+  不会显示成 key 或空白。
+- **`WID_LANG` 环境变量**可临时覆盖配置里的语言，供脚本和一次性运行使用。
+- **文档双语**：`docs/*.md` 与 `docs/*.zh-CN.md` 成对，`CONTRIBUTING`、`SECURITY` 同样处理。
+  本变更记录与每份发布说明都是英文段在前、中文段在后。
+
+#### 变更
+
+- **出报原因改成稳定代码**（`auto` / `manual` / `catchup` / `finalize`）。此前页面徽章
+  遇到不认识的值会把中文原文直接吐出来。
+- **`build.spec` 自动收集 `src/i18n*.py`**：以后新增语言模块不会漏进绿色版。
+- 日期、时长、星期几的格式跟随语言（`Oct 18` / `10 月 18 日`）。
+
+#### 修复
+
+以下四条来自未发布的 v1.1.2，一并并入本版：
 
 - **04:00 的终版不再丢**：补终版与当日清理同时启动时，清理先拿到「正在写日报」的锁，
   出报进程一秒后醒来发现被占用就直接放弃。现在出报最多等 10 秒再判忙，清理也排到出报之前启动。
@@ -26,6 +116,7 @@
   失败再退回 `schtasks /create`；删除、查询同样双路。
 
 ## [v1.1] - 2026-10-30
+
 
 日报页从「采集审计」改成「成果简报」：首屏是 3–5 张成果卡，接着是待办与卡点、
 合并成 4–6 段的工作主线、一条时间色带，原始活动块与截图全部折叠进附录。

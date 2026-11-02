@@ -6,6 +6,8 @@
 - 状态每 3 秒轮询一次，与 CLI 共用 status / control / doctor 三个模块，结论永远一致。
 """
 from __future__ import annotations
+from i18n import t, tn
+import i18n
 
 import ctypes
 import json
@@ -32,8 +34,8 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.1.2"
-TITLE = "What-IDid · 工作记录"
+VERSION = "1.2"
+TITLE = t("What-IDid · Work Log")
 
 # 托盘菜单命令号（任意唯一整数即可）
 CMD_SHOW = 11
@@ -62,7 +64,7 @@ CAT_COLOR = {          # 与 src/render.py 的 CAT_COLOR 保持一致
     "dev": "#2563eb", "doc": "#0d9488", "meet": "#d97706",
     "comm": "#7c3aed", "web": "#64748b", "other": "#94a3b8",
 }
-CAT_LABEL = {"dev": "开发", "doc": "文档", "meet": "会议", "comm": "沟通", "web": "浏览", "other": "其他"}
+CAT_LABEL = {"dev": t("Dev"), "doc": t("Docs"), "meet": t("Meetings"), "comm": t("Comms"), "web": t("Browsing"), "other": t("Other")}
 
 # 行为动词（与 src/behavior.py 的 VERBS 同源，这里只做展示用）
 VERB_LABEL = {k: v["label"] for k, v in behavior_mod.VERBS.items()}
@@ -83,10 +85,10 @@ def px(n: float) -> int:
 def fmt_dur(minutes: float) -> str:
     m = int(round(minutes or 0))
     if m <= 0:
-        return "0 分"
+        return t("0 min")
     if m < 60:
-        return f"{m} 分"
-    return f"{m // 60} 小时 {m % 60} 分" if m % 60 else f"{m // 60} 小时"
+        return t("{n} min", n=m)
+    return t("{h} h {m} min", h=m // 60, m=m % 60) if m % 60 else t("{h} h", h=m // 60)
 
 
 def short_date(day: str) -> str:
@@ -98,18 +100,31 @@ def pretty_date(day: str) -> str:
         d = timeutil.parse_day(day)
     except Exception:
         return day
-    return f"{d.month} 月 {d.day} 日"
+    return t("{m}/{d}", m=d.month, d=d.day)
 
 
-def weekday_cn(day: str) -> str:
+#: 英文是源，其它语言在 catalog 里各有一条（周一 / 周一…）
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_WEEKDAYS_LONG = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def weekday_short(day: str) -> str:
     try:
-        return "周" + "一二三四五六日"[timeutil.parse_day(day).weekday()]
+        return t(_WEEKDAYS[timeutil.parse_day(day).weekday()])
+    except Exception:
+        return ""
+
+
+def weekday_long(day: str) -> str:
+    """详情页标题用全名：旧日报里存的是生成时的语言，这里按日期重算。"""
+    try:
+        return t(_WEEKDAYS_LONG[timeutil.parse_day(day).weekday()])
     except Exception:
         return ""
 
 
 def next_run_label(iso: str) -> str:
-    """把 ISO 时间说成「今天 21:00 / 明天 21:00」。"""
+    """把 ISO 时间说成「Today 21:00 / Tomorrow 21:00」之类的相对时间。"""
     if not iso:
         return ""
     try:
@@ -118,7 +133,12 @@ def next_run_label(iso: str) -> str:
         return ""
     today = timeutil.now().date()
     delta = (dt.date() - today).days
-    prefix = "今天" if delta == 0 else ("明天" if delta == 1 else f"{dt.month}/{dt.day}")
+    if delta == 0:
+        prefix = t("Today")
+    elif delta == 1:
+        prefix = t("Tomorrow")
+    else:
+        prefix = t("{m}/{d}", m=dt.month, d=dt.day)
     return f"{prefix} {dt:%H:%M}"
 
 
@@ -324,33 +344,33 @@ class DashPage(tk.Frame):
         for i in range(4):
             stats.columnconfigure(i, weight=1, uniform="stat")
         stats.rowconfigure(0, weight=1)
-        self.c_state = StatCard(stats, "采集状态", "检查中", "正在读取心跳")
-        self.c_active = StatCard(stats, "今日有效活动", "—", "21:00 出报后可见")
-        self.c_data = StatCard(stats, "今日记录", "—", "—")
-        self.c_disk = StatCard(stats, "磁盘余量", "—")
+        self.c_state = StatCard(stats, t("Capture status"), t("Checking"), t("Reading heartbeat"))
+        self.c_active = StatCard(stats, t("Active today"), "—", t("Visible after the 21:00 report"))
+        self.c_data = StatCard(stats, t("Captured today"), "—", "—")
+        self.c_disk = StatCard(stats, t("Free disk"), "—")
         for i, c in enumerate((self.c_state, self.c_active, self.c_data, self.c_disk)):
             c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else px(10), 0))
 
         # 控制条
-        self.ctrl = Card(wrap, "采集控制", "关掉这个窗口不会停止记录")
+        self.ctrl = Card(wrap, t("Capture control"), t("Closing this window does not stop recording"))
         self.ctrl.pack(fill="x", pady=(px(12), 0))
         bar = tk.Frame(self.ctrl.body, bg=CARD)
         bar.pack(fill="x")
-        self.btn_start = FlatButton(bar, "开始采集", lambda: self.app.start_daemon(), "primary")
-        self.btn_stop = FlatButton(bar, "停止采集", lambda: self.app.stop_daemon(), "ghost")
-        self.btn_pause = FlatButton(bar, "暂停 30 分钟", lambda: self.app.pause(30), "soft")
-        self.btn_resume = FlatButton(bar, "恢复采集", lambda: self.app.resume(), "soft")
+        self.btn_start = FlatButton(bar, t("Start capture"), lambda: self.app.start_daemon(), "primary")
+        self.btn_stop = FlatButton(bar, t("Stop capture"), lambda: self.app.stop_daemon(), "ghost")
+        self.btn_pause = FlatButton(bar, t("Pause 30 min"), lambda: self.app.pause(30), "soft")
+        self.btn_resume = FlatButton(bar, t("Resume capture"), lambda: self.app.resume(), "soft")
         for b in (self.btn_start, self.btn_stop, self.btn_pause, self.btn_resume):
             b.pack(side="left", padx=(0, px(8)))
-        FlatButton(bar, "打开完整看板", lambda: self.app.open_board(), "ghost").pack(side="right")
-        self.btn_gen = FlatButton(bar, "立即生成日报", lambda: self.app.generate(), "primary")
+        FlatButton(bar, t("Open full dashboard"), lambda: self.app.open_board(), "ghost").pack(side="right")
+        self.btn_gen = FlatButton(bar, t("Generate report now"), lambda: self.app.generate(), "primary")
         self.btn_gen.pack(side="right", padx=(0, px(8)))
 
         self.ctrl_hint = tk.Label(self.ctrl.body, text="", bg=CARD, fg=SUBTLE, font=(FONT, 8), justify="left")
         self.ctrl_hint.pack(anchor="w", pady=(px(10), 0))
 
         # 今日行为时间轴
-        self.tl = Card(wrap, "今日行为时间轴", "色带按行为上色，鼠标移上去看这段在做什么")
+        self.tl = Card(wrap, t("Today's activity timeline"), t("The strip is colored by activity; hover a segment to see what it was."))
         self.tl.pack(fill="x", pady=(px(12), 0))
         self.tl_now = tk.Label(self.tl.body, text="", bg=CARD, fg=MUTED, font=(FONT, 9), anchor="w")
         self.tl_now.pack(fill="x", pady=(0, px(6)))
@@ -360,14 +380,14 @@ class DashPage(tk.Frame):
         self.strip.bind("<Motion>", self._hover_strip)
         self._segs: list[dict] = []
         self._beh_sig = None
-        self._empty_hint = "今天还没有活动块：日报在 21:00 生成，之后这里会显示完整时间线"
+        self._empty_hint = t("No activity blocks yet today. The report runs at 21:00, after which the full timeline appears here.")
         self.legend = tk.Frame(self.tl.body, bg=CARD)
         self.legend.pack(fill="x", pady=(px(8), 0))
         self.blist = tk.Frame(self.tl.body, bg=CARD)
         self.blist.pack(fill="x", pady=(px(4), 0))
 
         # 最近两周
-        self.wk = Card(wrap, "最近 14 天", "点击柱子查看当天日报")
+        self.wk = Card(wrap, t("Last 14 days"), t("Click a bar to open that day's report"))
         self.wk.pack(fill="x", pady=(px(12), 0))
         self.week = tk.Canvas(self.wk.body, bg=CARD, height=px(96), highlightthickness=0, bd=0)
         self.week.pack(fill="x")
@@ -427,9 +447,10 @@ class DashPage(tk.Frame):
             self.tl_now.configure(text=self._empty_hint, fg=SUBTLE)
         else:
             total = sum(int(it.get("minutes") or 0) for it in items)
-            tail = "· 行为标签来自模型推测" if source == "model" else "· 行为标签是本地规则推的，出报后会换成模型判断"
+            tail = t("· Activity labels come from the model") if source == "model" else t("· Activity labels come from local rules; the model's reading replaces them after the report")
             self.tl_now.configure(
-                text=f"{len(items)} 段行为 · 覆盖 {fmt_dur(total)}　{tail}", fg=SUBTLE)
+                text=t("{n} segments · covering {dur}　{tail}",
+  n=len(items), dur=fmt_dur(total), tail=tail), fg=SUBTLE)
 
         for w in self.legend.winfo_children():
             w.destroy()
@@ -455,7 +476,7 @@ class DashPage(tk.Frame):
             row.pack(fill="x", pady=px(2))
             tk.Label(row, text=f"{it.get('start', '')}–{it.get('end', '')}", bg=CARD, fg=SUBTLE,
                      font=(MONO, 8), width=12, anchor="w").pack(side="left")
-            tk.Label(row, text=f"{it.get('minutes', 0)} 分", bg=CARD, fg=SUBTLE,
+            tk.Label(row, text=t("{n} min", n=it.get("minutes", 0)), bg=CARD, fg=SUBTLE,
                      font=(FONT, 8), width=5, anchor="w").pack(side="left")
             dot = tk.Canvas(row, width=px(7), height=px(7), bg=CARD, highlightthickness=0)
             dot.create_oval(0, 0, px(7), px(7),
@@ -468,7 +489,8 @@ class DashPage(tk.Frame):
                 lbl = tk.Label(row, text="　" + detail, bg=CARD, fg=MUTED, font=(FONT, 8), anchor="w")
                 lbl.pack(side="left", fill="x", expand=True)
         if len(items) > len(shown):
-            tk.Label(self.blist, text=f"…另外 {len(items) - len(shown)} 段，出报后可在「日报」页看全",
+            tk.Label(self.blist, text=t("…{n} more segments; open the Reports page after the report to see them all",
+  n=len(items) - len(shown)),
                      bg=CARD, fg=SUBTLE, font=(FONT, 8)).pack(anchor="w", pady=(px(4), 0))
 
     def set_timeline(self, segs: list[dict], empty_hint: str = ""):
@@ -522,30 +544,30 @@ class DashPage(tk.Frame):
         hb = snap["heartbeat"]
         pause = snap["paused"]
         if snap.get("privacy_error"):
-            self.c_state.set_value("内容处理已停止", snap["privacy_error"], BAD_C)
+            self.c_state.set_value(t("Content processing stopped"), snap["privacy_error"], BAD_C)
         elif pause:
             until = pause.get("until") or ""
-            tail = f"，{timeutil.parse(until):%H:%M} 自动恢复" if until else "（手动恢复）"
-            self.c_state.set_value("已暂停", f"暂停于 {(pause.get('paused_at') or '')[11:16]}{tail}", WARN_C)
+            tail = t(", resumes at {t}", t=timeutil.parse(until).strftime("%H:%M")) if until else t("(resume manually)")
+            self.c_state.set_value(t("Paused"), t("paused at {at}{tail}", at=(pause.get("paused_at") or "")[11:16], tail=tail), WARN_C)
         elif hb["alive"]:
             app_name = (hb["raw"].get("app") or "").replace(".exe", "")
-            self.c_state.set_value("运行中", f"{hb['age']} 秒前心跳 · {app_name or '空闲'}", OK_C)
+            self.c_state.set_value(t("Running"), t("{age}s since last heartbeat · {app}", age=hb["age"], app=app_name or "idle"), OK_C)
         else:
-            self.c_state.set_value("未运行", "现在没有在记录，点「开始采集」", BAD_C)
+            self.c_state.set_value(t("Not running"), t("Not recording now. Hit \"Start capture\"."), BAD_C)
 
         tr = snap["today_report"]
         if tr["exists"]:
             self.c_active.set_value(fmt_dur(tr["active_minutes"]),
-                                 f"{tr['block_count']} 个活动块 · 今日日报已生成")
+                                 t("{n} blocks · today's report is ready", n=tr["block_count"]))
         else:
-            self.c_active.set_value("—", "21:00 自动出报，也可点右侧按钮")
+            self.c_active.set_value("—", t("Runs at 21:00 automatically; the button on the right works too"))
 
-        self.c_data.set_value(f"{snap['shots']} 张",
-                           f"{snap['events']:,} 条事件 · {snap['day_size_mb']:.0f} MB")
+        self.c_data.set_value(t("{n} shots", n=snap["shots"]),
+                           t("{a:,} events · {b:.0f} MB", a=snap["events"], b=snap["day_size_mb"]))
 
         disk = snap["disk_free_gb"]
         self.c_disk.set_value(f"{disk:.0f} GB" if disk is not None else "—",
-                           f"{paths.ROOT.drive} 盘 · 数据在 {paths.ROOT.name}",
+                           t("drive {drive} · data in {name}", drive=paths.ROOT.drive, name=paths.ROOT.name),
                            BAD_C if (disk is not None and disk < 5) else TEXT)
 
         # 按钮可用性
@@ -556,8 +578,10 @@ class DashPage(tk.Frame):
 
         pending = hb["raw"].get("pending_ocr") or 0
         self.ctrl_hint.configure(
-            text=(f"数据目录 {paths.ROOT}    ·    采样间隔 {snap['interval_sec']} 秒"
-                  f"    ·    OCR 队列 {pending}    ·    今日 OCR 成功 {hb['raw'].get('ocr_ok', 0)} / 失败 {hb['raw'].get('ocr_failed', 0)}"))
+            text=(t("Data folder {root}    ·    sample interval {sec}s"
+  "    ·    OCR queue {q}    ·    OCR today: {ok} ok / {fail} failed",
+  root=paths.ROOT, sec=snap["interval_sec"], q=pending,
+  ok=hb["raw"].get("ocr_ok", 0), fail=hb["raw"].get("ocr_failed", 0))))
 
         self._render_notices(snap)
         self._refresh_timeline(snap)
@@ -567,7 +591,7 @@ class DashPage(tk.Frame):
         day = snap["workday"]
         nxt = next_run_label((snap.get("report") or {}).get("next_at", ""))
         if nxt:
-            self.tl.sub_lbl.configure(text=f"色带按行为上色　·　下次自动出报 {nxt}")
+            self.tl.sub_lbl.configure(text=t("Strip colored by activity · next auto report {nxt}", nxt=nxt))
         d = status.load_report(day) or {}
         rep = d.get("report") or {}
         beh = rep.get("behaviors") or []
@@ -580,8 +604,7 @@ class DashPage(tk.Frame):
         if live:
             self.set_behaviors(behavior_mod.timeline_segments(live), live, source="local")
         else:
-            self.set_behaviors([], [], "今天还没有活动块：开始采集后这里会实时显示行为轴，"
-                                      "21:00 出报后会换成模型对每段时间的行为判断")
+            self.set_behaviors([], [], t("No activity blocks yet. Once capture starts this shows a live timeline; after the 21:00 report it becomes the model's reading of each segment."))
 
     def _refresh_weeks(self, snap: dict):
         today = snap["workday"]
@@ -602,42 +625,42 @@ class DashPage(tk.Frame):
     def _render_notices(self, snap: dict):
         items = []
         if snap.get("privacy_error"):
-            items.append((BAD_C, "配置无效，内容采集与外发已停止", snap["privacy_error"],
-                          "打开配置", lambda: open_uri(str(paths.CONFIG_PATH))))
+            items.append((BAD_C, t("Invalid configuration: capture and sending are stopped"), snap["privacy_error"],
+                          t("Open config"), lambda: open_uri(str(paths.CONFIG_PATH))))
         elif not snap.get("allow_llm", True):
-            items.append((MUTED, "仅本地模式", "已禁止模型请求，日报使用本地时间线",
-                          "设置", lambda: self.app.show("settings")))
+            items.append((MUTED, t("Local-only mode"), t("Model requests are disabled; reports use the local timeline"),
+                          t("Settings"), lambda: self.app.show("settings")))
         sched = snap.get("report") or {}
         review = snap.get("review") or {}
         if review and not review.get("error"):
-            items.append((WARN_C, "有内容等你确认才外发",
-                          f"目标 {review.get('model') or '模型'}，约 {review.get('chars', 0)} 字；"
-                          "确认前不会调用模型",
-                          "去确认",
+            items.append((WARN_C, t("Content is waiting for your approval"),
+                          t("Target {model}, about {chars} chars; the model is not called until you confirm",
+  model=review.get("model") or "model", chars=review.get("chars", 0)),
+                          t("Review"),
                           lambda d=review.get("day"): (self.app.open_report(d) if d
                                                        else self.app.show("reports"))))
         if sched.get("overdue"):
             day = sched.get("overdue_day") or ""
-            why = sched.get("overdue_why") or "到点没跑成"
-            items.append((BAD_C, f"{day[5:]} 的日报还没生成",
-                          f"现在是「{why}」，点右边立刻补一版", "立即生成",
+            why = sched.get("overdue_why") or t("Scheduled run did not finish")
+            items.append((BAD_C, t("No report for {day} yet", day=day[5:]),
+                          t("Current status is \"{why}\"; use the button on the right to catch up", why=why), t("Generate now"),
                           lambda d=day: self.app.generate(d or None, force=True)))
         if not snap["has_key"] and snap.get("allow_llm", True) and not snap.get("privacy_error"):
-            items.append((WARN_C, "还没配置大模型 Key", "日报会降级成时间线版，丢掉“在改哪个文件”这类细节",
-                          "去设置", lambda: self.app.show("settings")))
+            items.append((WARN_C, t("No model API key configured"), t("Reports fall back to a timeline and lose details like which file you were editing"),
+                          t("Settings"), lambda: self.app.show("settings")))
         if not snap["heartbeat"]["alive"] and not snap["paused"]:
-            items.append((BAD_C, "采集没有在运行", "现在的工作不会被记录",
-                          "启动采集", lambda: self.app.start_daemon()))
+            items.append((BAD_C, t("Capture is not running"), t("Current work is not being recorded"),
+                          t("Start capture"), lambda: self.app.start_daemon()))
         if not self.app.autostart_installed():
-            items.append((MUTED, "没有注册开机自启", "重启电脑后不会自动开始记录",
-                          "立即注册", lambda: self.app.enable_autostart()))
+            items.append((MUTED, t("Autostart is not registered"), t("Recording will not resume automatically after a reboot"),
+                          t("Register now"), lambda: self.app.enable_autostart()))
         elif not self.app.report_task_installed():
-            items.append((MUTED, "没有注册出报定时任务",
-                          "采集停了或电脑 21:00 关着的时候，日报不会自动补",
-                          "立即注册", lambda: self.app.enable_autostart()))
+            items.append((MUTED, t("Report schedule is not registered"),
+                          t("If capture stops or the machine is off at 21:00, the report is not filled in automatically"),
+                          t("Register now"), lambda: self.app.enable_autostart()))
         if snap["today_report"]["exists"] and snap["today_report"]["status"] == "degraded":
-            items.append((MUTED, "今日日报是降级版本", "原因：模型未配置或调用失败，页面只有时间线",
-                          "查看", lambda: self.app.show("reports")))
+            items.append((MUTED, t("Today's report is degraded"), t("Cause: the model is missing or the call failed, so the page is timeline-only"),
+                          t("View"), lambda: self.app.show("reports")))
         sig = tuple((t, a) for _, t, _, a, _ in items)
         if sig == getattr(self, "_notice_sig", None):
             return
@@ -675,8 +698,8 @@ class ReportsPage(tk.Frame):
         left.grid(row=0, column=0, sticky="nsew", padx=(px(22), 0), pady=px(2))
         head = tk.Frame(left, bg=CARD)
         head.pack(fill="x", padx=px(14), pady=(px(12), px(6)))
-        tk.Label(head, text="日报归档", bg=CARD, fg=TEXT, font=(FONT, 11, "bold")).pack(side="left")
-        self.count_lbl = tk.Label(head, text="0 份", bg=CARD, fg=SUBTLE, font=(FONT, 8))
+        tk.Label(head, text=t("Report archive"), bg=CARD, fg=TEXT, font=(FONT, 11, "bold")).pack(side="left")
+        self.count_lbl = tk.Label(head, text=t("0 reports"), bg=CARD, fg=SUBTLE, font=(FONT, 8))
         self.count_lbl.pack(side="left", padx=(px(8), 0))
         self.list_sf = ScrollFrame(left, CARD)
         self.list_sf.pack(fill="both", expand=True, padx=px(6), pady=(0, px(8)))
@@ -699,10 +722,10 @@ class ReportsPage(tk.Frame):
 
         btns = tk.Frame(head2, bg=CARD)
         btns.pack(side="right")
-        self.btn_md = FlatButton(btns, "复制 Markdown", self._copy_md, "soft", padx=10, pady=5, font_size=9)
+        self.btn_md = FlatButton(btns, t("Copy Markdown"), self._copy_md, "soft", padx=10, pady=5, font_size=9)
         self.btn_md.pack(side="right", padx=(px(6), 0))
-        FlatButton(btns, "完整看板", self._open_board, "ghost", padx=10, pady=5, font_size=9).pack(side="right", padx=(px(6), 0))
-        self.btn_regen = FlatButton(btns, "重新生成", self._regen, "ghost", padx=10, pady=5, font_size=9)
+        FlatButton(btns, t("Full dashboard"), self._open_board, "ghost", padx=10, pady=5, font_size=9).pack(side="right", padx=(px(6), 0))
+        self.btn_regen = FlatButton(btns, t("Regenerate"), self._regen, "ghost", padx=10, pady=5, font_size=9)
         self.btn_regen.pack(side="right")
 
         self.badge_box = tk.Frame(top.body, bg=CARD)
@@ -792,9 +815,9 @@ class ReportsPage(tk.Frame):
         for w in self.list_sf.body.winfo_children():
             w.destroy()
         self._rows.clear()
-        self.count_lbl.configure(text=f"{len(reports)} 份")
+        self.count_lbl.configure(text=t("{n} reports", n=len(reports)))
         if not reports:
-            tk.Label(self.list_sf.body, text="还没有日报\n今晚 21:00 会自动生成第一份",
+            tk.Label(self.list_sf.body, text=t("No reports yet\nThe first one is generated tonight at 21:00"),
                      bg=CARD, fg=SUBTLE, font=(FONT, 9), justify="left").pack(anchor="w", padx=px(12), pady=px(14))
             return
         for r in reports:
@@ -816,12 +839,12 @@ class ReportsPage(tk.Frame):
         line1.pack(fill="x")
         d1 = tk.Label(line1, text=short_date(day), bg=CARD, fg=TEXT, font=(FONT, 9, "bold"))
         d1.pack(side="left")
-        d2 = tk.Label(line1, text=r.get("weekday", ""), bg=CARD, fg=SUBTLE, font=(FONT, 8))
+        d2 = tk.Label(line1, text=weekday_short(r.get("day", "") or day), bg=CARD, fg=SUBTLE, font=(FONT, 8))
         d2.pack(side="left", padx=(px(5), 0))
         d3 = tk.Label(line1, text=fmt_dur(r.get("active_minutes", 0)) if r.get("active_minutes") else "",
                       bg=CARD, fg=SUBTLE, font=(FONT, 8))
         d3.pack(side="right")
-        head_text = (r.get("headline") or "（无标题）").strip()
+        head_text = (r.get("headline") or t("(untitled)")).strip()
         d4 = tk.Label(box, text=head_text, bg=CARD, fg=MUTED,
                       font=(FONT, 8), anchor="w", justify="left", wraplength=px(200))
         d4.pack(fill="x", pady=(px(3), 0))
@@ -854,10 +877,10 @@ class ReportsPage(tk.Frame):
         self.render(day)
 
     # -------------------------------------------------- 详情
-    def show_placeholder(self, msg: str = "左侧选一份日报\n或点「立即生成日报」把今天的数据变成文字",
+    def show_placeholder(self, msg: str = t("Pick a report on the left,\nor hit \"Generate report now\" to turn today's data into text."),
                          day: str = ""):
-        self.date_lbl.configure(text=pretty_date(day) if day else "还没有日报")
-        self.wd_lbl.configure(text=weekday_cn(day) if day else "")
+        self.date_lbl.configure(text=pretty_date(day) if day else t("No reports yet"))
+        self.wd_lbl.configure(text=weekday_short(day) if day else "")
         self.headline.configure(text=msg)
         for w in self.badge_box.winfo_children():
             w.destroy()
@@ -890,46 +913,45 @@ class ReportsPage(tk.Frame):
                 return
             # 分清两种"没有"：这天压根没出过报，vs 出过但 JSON 没了
             if (paths.REPORTS / f"{day}.md").exists():
-                msg = "这份日报的 JSON 文件丢了，只剩 Markdown\n可以点「重新生成」按当天数据重建"
+                msg = t("The JSON for this report is gone; only the Markdown is left.\nHit \"Regenerate\" to rebuild it from that day's data.")
             else:
-                msg = ("这天还没有日报\n"
-                       "晚上 21:00 会自动生成，也可以点「重新生成」立刻整理")
+                msg = (t("No report for this day yet.\nIt is generated at 21:00, or hit \"Regenerate\" now."))
             self.show_placeholder(msg, day=day)
             return
         rep = d.get("report") or {}
         self.date_lbl.configure(text=pretty_date(day))
-        self.wd_lbl.configure(text=d.get("weekday", ""))
-        self.headline.configure(text=rep.get("headline") or "（模型没有给出标题）")
+        self.wd_lbl.configure(text=weekday_long(day))
+        self.headline.configure(text=rep.get("headline") or t("(the model gave no title)"))
 
         for w in self.badge_box.winfo_children():
             w.destroy()
         st = d.get("status", "")
         if st == "ok":
-            self._badge("模型生成", OK_C, "#ecfdf5")
+            self._badge(t("Model"), OK_C, "#ecfdf5")
         elif st == "degraded":
-            self._badge("降级时间线版", WARN_C, "#fffbeb")
+            self._badge(t("Degraded timeline"), WARN_C, "#fffbeb")
         elif st == "empty":
-            self._badge("当日无数据", MUTED, "#f1f3f7")
+            self._badge(t("No data that day"), MUTED, "#f1f3f7")
         if review:
-            self._badge("有更新的待审内容", WARN_C, "#fffbeb")
+            self._badge(t("Newer content is waiting for review"), WARN_C, "#fffbeb")
         conf = rep.get("confidence")
         if conf:
-            self._badge(f"置信度 {conf}", MUTED, "#f1f3f7")
+            self._badge(t("confidence {c}", c=conf), MUTED, "#f1f3f7")
         rev = d.get("revision", 1)
         if rev and rev > 1:
-            self._badge(f"第 {rev} 版", MUTED, "#f1f3f7")
+            self._badge(t("revision {n}", n=rev), MUTED, "#f1f3f7")
         self._day_ops(day, bool(review))
 
         for w in self.chips.winfo_children():
             w.destroy()
         stats = d.get("stats") or {}
         cov = d.get("coverage") or {}
-        self._chip(f"覆盖 {cov.get('start', '?')}–{cov.get('until', '?')}")
-        self._chip(f"有效 {fmt_dur(stats.get('active_minutes', 0))}")
-        self._chip(f"{stats.get('block_count', 0)} 个活动块")
-        self._chip(f"{stats.get('shot_count', 0)} 张截图")
+        self._chip(t("covers {start}-{end}", start=cov.get("start", "?"), end=cov.get("until", "?")))
+        self._chip(t("active {dur}", dur=fmt_dur(stats.get("active_minutes", 0))))
+        self._chip(t("{n} blocks", n=stats.get("block_count", 0)))
+        self._chip(t("{n} screenshots", n=stats.get("shot_count", 0)))
         if d.get("generated_at"):
-            self._chip(f"生成于 {d['generated_at'][11:16]}")
+            self._chip(t("generated {t}", t=d["generated_at"][11:16]))
 
         beh = rep.get("behaviors") or []
         self._segs = (behavior_mod.timeline_segments(beh) if beh
@@ -942,41 +964,41 @@ class ReportsPage(tk.Frame):
         """与"这一天"相关的补充/危险操作，靠右放，避免顶部按钮继续变长。"""
         ops = tk.Frame(self.badge_box, bg=CARD)
         ops.pack(side="right")
-        FlatButton(ops, "补录", lambda: self._add_manual(day), "ghost",
+        FlatButton(ops, t("Add entry"), lambda: self._add_manual(day), "ghost",
                    padx=8, pady=2, font_size=8).pack(side="right", padx=(px(6), 0))
-        FlatButton(ops, "遗忘这天", lambda: self._forget(day), "ghost",
+        FlatButton(ops, t("Forget day"), lambda: self._forget(day), "ghost",
                    padx=8, pady=2, font_size=8).pack(side="right")
         if has_review:
-            FlatButton(ops, "审核待发内容",
+            FlatButton(ops, t("Review queued content"),
                        lambda: self._render_review(day, status.pending_review(day)),
                        "primary", padx=8, pady=2, font_size=8).pack(side="right", padx=(px(6), 0))
 
     def _render_review(self, day: str, info: dict):
         """展示"将要发送给模型的原文"，确认才外发。"""
         self.date_lbl.configure(text=pretty_date(day))
-        self.wd_lbl.configure(text=weekday_cn(day))
-        self.headline.configure(text="这一天还没出报：有一份待审核的模型输入，确认后才会发送")
+        self.wd_lbl.configure(text=weekday_short(day))
+        self.headline.configure(text=t("No report yet: model input is waiting for your review, and nothing is sent before you confirm."))
 
         for w in self.badge_box.winfo_children():
             w.destroy()
-        self._badge("待审核", WARN_C, "#fffbeb")
+        self._badge(t("Pending review"), WARN_C, "#fffbeb")
         if info.get("model"):
             self._badge(str(info["model"]), MUTED, "#f1f3f7")
         ops = tk.Frame(self.badge_box, bg=CARD)
         ops.pack(side="right")
-        FlatButton(ops, "丢弃", lambda: self._discard_review(day), "ghost",
+        FlatButton(ops, t("Discard"), lambda: self._discard_review(day), "ghost",
                    padx=8, pady=2, font_size=8).pack(side="right", padx=(px(6), 0))
-        FlatButton(ops, "审核并发送", lambda: self.app.approve_review(day), "primary",
+        FlatButton(ops, t("Approve & send"), lambda: self.app.approve_review(day), "primary",
                    padx=10, pady=2, font_size=8).pack(side="right")
 
         for w in self.chips.winfo_children():
             w.destroy()
         if info.get("coverage"):
-            self._chip(f"覆盖 {info['coverage']}")
+            self._chip(t("covers {c}", c=info["coverage"]))
         if info.get("chars"):
-            self._chip(f"将要发送 {info['chars']} 字")
+            self._chip(t("{n} chars to send", n=info["chars"]))
         if info.get("generated_at"):
-            self._chip(f"生成于 {info['generated_at'][11:16]}")
+            self._chip(t("generated {t}", t=info["generated_at"][11:16]))
 
         self._segs = []
         self._draw_strip()
@@ -989,14 +1011,13 @@ class ReportsPage(tk.Frame):
             payload = ""
 
         self._enable()
-        self.text.insert("end", "下面是将要发给模型的原文（发送前已按隐私规则脱敏）。"
-                               "确认无误再发送；不确认就不会外发。\n\n", ("p", "warn"))
+        self.text.insert("end", t("Below is the exact text that will be sent to the model (already redacted by the privacy rules). Send only if it looks right; nothing leaves this machine until you confirm.\n\n"), ("p", "warn"))
         if payload:
             self.text.insert("end", payload[:6000], ("p",))
             if len(payload) > 6000:
-                self.text.insert("end", "\n…（预览已截断，完整内容见预览文件）", ("muted",))
+                self.text.insert("end", t("\n…(preview truncated; see the preview file for the full text)"), ("muted",))
         else:
-            self.text.insert("end", "预览文件读不出来，可以丢弃后重新生成。", ("muted",))
+            self.text.insert("end", t("The preview file cannot be read. Discard it and regenerate."), ("muted",))
         self._disable()
         self.text.yview_moveto(0)
 
@@ -1004,7 +1025,7 @@ class ReportsPage(tk.Frame):
         for it in items:
             verb = it.get("verb") or "admin"
             self.text.insert("end", f"{it.get('start', '')}–{it.get('end', '')}", ("time",))
-            self.text.insert("end", f"  {it.get('minutes', 0)} 分  ", ("dur",))
+            self.text.insert("end", t("  {n} min  ", n=it.get("minutes", 0)), ("dur",))
             self.text.insert("end", "● ", (f"vb_{verb}",))
             self.text.insert("end", it.get("label") or "", ("behlabel",))
             if it.get("confidence") == "low":
@@ -1102,11 +1123,11 @@ class ReportsPage(tk.Frame):
         first = True
 
         if d.get("status") == "degraded":
-            self.text.insert("end", "这份日报是降级版本：模型未配置或调用失败，只保留了本地统计与时间线。\n",
+            self.text.insert("end", t("This is a degraded report: the model was not configured or the call failed, so only local stats and the timeline are included.\n"),
                              ("p", "warn"))
             first = False
         elif d.get("status") == "empty":
-            self.text.insert("end", "当天有效活动太少，没有生成正文。下面这些统计与缺口说明就是全部内容。\n",
+            self.text.insert("end", t("Too little activity that day to write a narrative. The stats and gaps below are all there is.\n"),
                              ("p", "muted"))
             first = False
 
@@ -1121,53 +1142,54 @@ class ReportsPage(tk.Frame):
         # 而不是"我打开过哪些窗口"。与 web/day 页面、Markdown 归档保持同一套顺序。
         cards = rv.get("cards") or []
         if cards:
-            self._section("今日成果", first)
+            self._section(t("Outcomes today"), first)
             first = False
             for c in cards:
                 self.text.insert("end", f"【{c.get('status_label', '')}】", ("bullet", "muted"))
                 self._write_inline(c.get("what", ""), "bullet")
                 self.text.insert("end", "\n", ("bullet",))
-                for label, key in (("意义", "impact"), ("下一步", "next"), ("证据", "evidence")):
+                for label, key in ((t("Significance"), "impact"), (t("Next"), "next"), (t("Evidence"), "evidence")):
                     self._write_sub(label, c.get(key, ""))
 
         todos = rv.get("todos") or []
         if todos:
-            self._section("待办与卡点", first)
+            self._section(t("Open items & blockers"), first)
             first = False
-            kind_label = {"waiting": "待外部", "blocked": "卡点", "todo": "待办"}
-            for t in todos:
-                self.text.insert("end", f"【{kind_label.get(t.get('kind'), '待办')}】", ("bullet", "muted"))
-                self._write_inline(t.get("item", ""), "bullet")
+            kind_label = {"waiting": t("Waiting on others"), "blocked": t("Blockers"), "todo": t("To do")}
+            for item in todos:
+                self.text.insert("end", t("[{kind}] ", kind=kind_label.get(item.get("kind"), "to do")), ("bullet", "muted"))
+                self._write_inline(item.get("item", ""), "bullet")
                 self.text.insert("end", "\n", ("bullet",))
-                self._write_sub("为什么", t.get("why", ""))
+                self._write_sub(t("Why"), item.get("why", ""))
 
         tasks = rv.get("tasks") or []
         if tasks:
-            self._section("工作主线", first)
+            self._section(t("Main threads"), first)
             first = False
             tnotes = rv.get("task_notes") or {}
-            for t in tasks:
-                self.text.insert("end", f"{t.get('start', '')}–{t.get('end', '')}  ", ("time",))
-                self._write_inline(t.get("label", ""), "behlabel")
-                self.text.insert("end", f"　{t.get('minutes', 0)} 分\n", ("behlabel", "muted"))
-                self._write_sub("结果", t.get("outcome", ""))
+            for task in tasks:
+                self.text.insert("end", f"{task.get('start', '')}–{task.get('end', '')}  ", ("time",))
+                self._write_inline(task.get("label", ""), "behlabel")
+                self.text.insert("end", t("　{n} min\n", n=task.get("minutes", 0)), ("behlabel", "muted"))
+                self._write_sub(t("Result"), task.get("outcome", ""))
             if tnotes.get("merged"):
-                self.text.insert("end", f"（已把 {tnotes['merged']} 个短切换并入所属主线，"
-                                        f"逐段明细见下方行为时间轴）\n", ("p", "muted"))
+                self.text.insert("end", t("({n} short switches merged into their main threads; "
+  "per-segment detail is in the timeline below)\n", n=tnotes["merged"]), ("p", "muted"))
 
         cats = (d.get("stats") or {}).get("by_category") or {}
         if cats:
-            self._section("时间分配", first)
+            self._section(t("Time split"), first)
             first = False
-            parts = [f"{CAT_LABEL.get(k, k)} {float(v):.0f} 分" for k, v in cats.items()]
+            parts = [t("{cat} {n:.0f} min", cat=CAT_LABEL.get(k, k), n=float(v)) for k, v in cats.items()]
             rhythm = (d.get("stats") or {}).get("rhythm") or {}
             if rhythm.get("longest_focus_min"):
-                parts.append(f"最长专注 {rhythm['longest_focus_min']} 分（{rhythm.get('longest_focus_at', '')}）")
+                parts.append(t("Longest focus {m} min ({at})",
+  m=rhythm["longest_focus_min"], at=rhythm.get("longest_focus_at", "")))
             self.text.insert("end", "　·　".join(parts) + "\n", ("p", "muted"))
 
         offline = rep.get("offline") or []
         if offline:
-            self._section("人工补录", first)
+            self._section(t("Manual entries"), first)
             first = False
             for o in offline:
                 if not isinstance(o, dict):
@@ -1181,29 +1203,29 @@ class ReportsPage(tk.Frame):
 
         fr = rep.get("friction") or []
         if fr:
-            self._section("卡点与代价", first)
+            self._section(t("Blockers & cost"), first)
             first = False
             for it in fr:
                 self.text.insert("end", "•  ", ("bullet",))
                 self._write_inline(it.get("what", ""), "bullet")
                 self.text.insert("end", "\n", ("bullet",))
-                for label, key in (("原因", "cause"), ("代价", "cost"), ("处理", "fix")):
+                for label, key in ((t("Cause"), "cause"), (t("Cost"), "cost"), (t("Handling"), "fix")):
                     self._write_sub(label, it.get(key, ""))
 
         ins = rep.get("insight") or []
         if ins:
-            self._section("洞察", first)
+            self._section(t("Insights"), first)
             first = False
             for it in ins:
                 self.text.insert("end", "•  ", ("bullet",))
                 self._write_inline(it.get("observation", ""), "bullet")
                 self.text.insert("end", "\n", ("bullet",))
-                for label, key in (("依据", "evidence"), ("下次", "action")):
+                for label, key in ((t("Basis"), "evidence"), (t("Next time"), "action")):
                     self._write_sub(label, it.get(key, ""))
 
-        for key, title in (("in_progress", "进行中"),
-                           ("blockers", "卡住的地方"),
-                           ("decisions", "做的决定")):
+        for key, title in (("in_progress", t("In progress")),
+                           ("blockers", t("Where it got stuck")),
+                           ("decisions", t("Decisions made"))):
             items = rep.get(key) or []
             if not items:
                 continue
@@ -1218,7 +1240,7 @@ class ReportsPage(tk.Frame):
                 self.text.insert("end", "\n", ("bullet",))
 
         if rep.get("opening_md") or rep.get("summary_md"):
-            self._section("过程", first)
+            self._section(t("What happened"), first)
             first = False
             if rep.get("opening_md"):
                 self._write_md(rep["opening_md"])
@@ -1228,13 +1250,13 @@ class ReportsPage(tk.Frame):
 
         beh = rep.get("behaviors") or []
         if beh:
-            self._section("行为时间轴（逐段明细）", first)
+            self._section(t("Activity timeline (segment by segment)"), first)
             first = False
             self._write_behaviors(beh)
 
         tl = rep.get("timeline") or []
         if tl:
-            self._section("时间线", first)
+            self._section(t("Timeline"), first)
             first = False
             for it in tl:
                 if not isinstance(it, dict):
@@ -1247,7 +1269,7 @@ class ReportsPage(tk.Frame):
 
         refs = d.get("refs") or []
         if refs:
-            self._section("相关文档", first)
+            self._section(t("Related documents"), first)
             first = False
             for r in refs:
                 label = r.get("label") or r.get("uri") or ""
@@ -1271,32 +1293,33 @@ class ReportsPage(tk.Frame):
 
         gaps = (rv.get("gaps") or {}).get("inside") or []
         if gaps:
-            self._section("记录中断", first)
+            self._section(t("Recording gaps"), first)
             first = False
             for g in gaps:
-                self.text.insert("end", f"•  {g.get('start', '')} – {g.get('end', '')}　"
-                                        f"{g.get('minutes', '')} 分钟没有记录（多半是离开、会议或休息）\n",
+                self.text.insert("end", t("•  {start} - {end}　{min} minutes with no record "
+  "(likely away, in a meeting, or on a break)\n",
+  start=g.get("start", ""), end=g.get("end", ""), min=g.get("minutes", "")),
                                  ("bullet", "muted"))
 
         meta = d.get("meta") or {}
         if meta.get("model") or meta.get("calls"):
-            self._section("生成信息", first)
-            parts = [f"模型 {meta.get('model', '?')}", f"调用 {meta.get('calls', 0)} 次"]
+            self._section(t("Generation details"), first)
+            parts = [t("model {m}", m=meta.get("model", "?")), t("{n} calls", n=meta.get("calls", 0))]
             if meta.get("prompt_tokens"):
-                parts.append(f"输入 {meta['prompt_tokens']} tokens")
+                parts.append(t("{n} input tokens", n=meta["prompt_tokens"]))
             if meta.get("completion_tokens"):
-                parts.append(f"输出 {meta['completion_tokens']} tokens")
+                parts.append(t("{n} output tokens", n=meta["completion_tokens"]))
             if meta.get("elapsed_ms"):
-                parts.append(f"耗时 {meta['elapsed_ms'] / 1000:.1f} 秒")
+                parts.append(t("{s:.1f} s", s=meta["elapsed_ms"] / 1000))
             if meta.get("issues"):
-                parts.append(f"校验提示 {len(meta['issues'])} 条")
+                parts.append(t("{n} validation notes", n=len(meta["issues"])))
             self.text.insert("end", "　·　".join(parts) + "\n", ("p", "muted"))
 
         self._disable()
 
     def _open(self, uri: str):
         if not open_uri(uri):
-            self.app.toast(f"打不开：{uri}", "warn")
+            self.app.toast(t("Cannot open: {uri}", uri=uri), "warn")
 
     # -------------------------------------------------- 动作
     def _open_board(self):
@@ -1314,11 +1337,11 @@ class ReportsPage(tk.Frame):
         try:
             text = p.read_text(encoding="utf-8")
         except OSError:
-            self.app.toast("这份日报没有 Markdown 文件", "warn")
+            self.app.toast(t("This report has no Markdown file"), "warn")
             return
         self.clipboard_clear()
         self.clipboard_append(text)
-        self.app.toast(f"已复制 {self.selected} 的 Markdown 全文（{len(text)} 字）")
+        self.app.toast(t("Copied the full Markdown for {day} ({n} chars)", day=self.selected, n=len(text)))
 
     # -------------------------------------------------- 补录 / 遗忘 / 审核
     def _add_manual(self, day: str):
@@ -1326,15 +1349,15 @@ class ReportsPage(tk.Frame):
         from tkinter import simpledialog
 
         text = simpledialog.askstring(
-            "补录线下活动",
-            f"给 {day} 补一条屏幕看不到的活动。\n"
-            "格式：开始-结束 名称\n例如：10:00-11:00 线下客户沟通",
+            t("Add offline activity"),
+            t("Add an activity for {day} that the screen could not see.\n"
+  "Format: start-end name\nExample: 10:00-11:00 client meeting", day=day),
             parent=self)
         if not text:
             return
         m = re.match(r"\s*(\d{1,2}:\d{2})\s*[-–—~至]\s*(\d{1,2}:\d{2})\s+(.+)$", text)
         if not m:
-            self.app.toast("格式不对，应该像 10:00-11:00 线下客户沟通", "warn")
+            self.app.toast(t("Wrong format. Try something like 10:00-11:00 client meeting"), "warn")
             return
         import manual as manual_mod
 
@@ -1343,13 +1366,14 @@ class ReportsPage(tk.Frame):
         except ValueError as exc:
             self.app.toast(str(exc), "warn")
             return
-        self.app.toast("已补录；点「重新生成」会套用到日报")
+        self.app.toast(t("Added. Hit \"Regenerate\" to fold it into the report."))
 
     def _forget(self, day: str):
         ok = messagebox.askyesno(
-            "遗忘这一天",
-            f"将永久删除 {day} 的截图、事件、OCR、日报、分享版与周汇总，无法恢复。\n\n"
-            "已经发给模型服务的内容无法撤回。继续？",
+            t("Forget this day"),
+            t("This permanently deletes screenshots, events, OCR, reports, share copies and "
+  "weekly summaries for {day}. It cannot be undone.\n\n"
+  "Anything already sent to the model service cannot be recalled. Continue?", day=day),
             icon="warning", default="no", parent=self)
         if not ok:
             return
@@ -1359,7 +1383,7 @@ class ReportsPage(tk.Frame):
         import report as report_mod
 
         report_mod.discard_review(day)
-        self.app.toast("已丢弃待审内容，什么都没外发")
+        self.app.toast(t("Pending content discarded. Nothing was sent."))
         self.app.refresh(force=True)
         self.render(day)
 
@@ -1375,6 +1399,7 @@ class SettingsPage(tk.Frame):
         self.wrap.pack(fill="x", padx=px(22), pady=(px(2), px(20)))
 
         self.vars: dict[str, tk.Variable] = {}
+        self._build_language()
         self._build_llm()
         self._build_capture()
         self._build_ocr()
@@ -1387,10 +1412,10 @@ class SettingsPage(tk.Frame):
         bar.pack(side="bottom", fill="x")
         inner = tk.Frame(bar, bg=CARD)
         inner.pack(fill="x", padx=px(22), pady=px(10))
-        FlatButton(inner, "保存设置", self._save, "primary", padx=18).pack(side="left")
-        FlatButton(inner, "打开配置文件", lambda: open_uri(str(paths.CONFIG_PATH)), "ghost").pack(side="left", padx=(px(8), 0))
-        FlatButton(inner, "重新读取", self.reload_form, "ghost").pack(side="left", padx=(px(8), 0))
-        self.save_hint = tk.Label(inner, text="改动保存后，采集进程会自动重启一次以生效",
+        FlatButton(inner, t("Save settings"), self._save, "primary", padx=18).pack(side="left")
+        FlatButton(inner, t("Open config file"), lambda: open_uri(str(paths.CONFIG_PATH)), "ghost").pack(side="left", padx=(px(8), 0))
+        FlatButton(inner, t("Reload"), self.reload_form, "ghost").pack(side="left", padx=(px(8), 0))
+        self.save_hint = tk.Label(inner, text=t("Saving restarts the capture process once so the change takes effect"),
                                   bg=CARD, fg=SUBTLE, font=(FONT, 8))
         self.save_hint.pack(side="left", padx=(px(14), 0))
 
@@ -1457,18 +1482,29 @@ class SettingsPage(tk.Frame):
         return box
 
     # -------------------------------------------------- 各分组
+    def _build_language(self):
+        card, g = self._card(t("Language"),
+                             t("Applies to the window and to the report headings"))
+        self.lang_var = tk.StringVar()
+        combo = ttk.Combobox(g, textvariable=self.lang_var, values=i18n.display_values(),
+                             state="readonly", width=24, font=(FONT, 9))
+        self._row(g, 0, t("Display language"), combo,
+                  t("The window reloads when you save. A language without a translation "
+                    "falls back to English"))
+        self._lang_shown = self.lang_var.get()
+
     def _build_llm(self):
-        card, g = self._card("大模型", "兼容 OpenAI 接口的服务都能用")
+        card, g = self._card(t("Language model"), t("Any service with an OpenAI-compatible API works"))
         r = 0
-        self._row(g, r, "接口地址", self._entry(g, "llm.base_url"), "如 https://api.deepseek.com/v1"); r += 1
-        self._row(g, r, "模型名", self._entry(g, "llm.model", width=24), "如 deepseek-chat / qwen-plus"); r += 1
+        self._row(g, r, t("Endpoint"), self._entry(g, "llm.base_url"), t("e.g. https://api.deepseek.com/v1")); r += 1
+        self._row(g, r, t("Model"), self._entry(g, "llm.model", width=24), t("e.g. deepseek-chat / qwen-plus")); r += 1
         key_box = tk.Frame(g, bg=CARD)
         self.key_entry = self._entry(key_box, "llm.key", width=38, show="•")
         self.key_entry.pack(side="left", ipady=px(4))
-        self.key_toggle = FlatButton(key_box, "显示", self._toggle_key, "soft", padx=10, pady=4, font_size=8)
+        self.key_toggle = FlatButton(key_box, t("Show"), self._toggle_key, "soft", padx=10, pady=4, font_size=8)
         self.key_toggle.pack(side="left", padx=(px(6), 0))
-        FlatButton(key_box, "测试连接", self._test_llm, "ghost", padx=10, pady=4, font_size=8).pack(side="left", padx=(px(6), 0))
-        self._row(g, r, "API Key", key_box, "留空则用环境变量 WID_LLM_API_KEY"); r += 1
+        FlatButton(key_box, t("Test connection"), self._test_llm, "ghost", padx=10, pady=4, font_size=8).pack(side="left", padx=(px(6), 0))
+        self._row(g, r, "API Key", key_box, t("Leave blank to use the WID_LLM_API_KEY env var")); r += 1
         box = tk.Frame(card.body, bg=CARD)
         box.pack(fill="x", pady=(px(6), 0))
         self.llm_hint = tk.Label(box, text="", bg=CARD, fg=SUBTLE, font=(FONT, 8), justify="left")
@@ -1477,80 +1513,85 @@ class SettingsPage(tk.Frame):
     def _toggle_key(self):
         hidden = str(self.key_entry.cget("show")) == "•"
         self.key_entry.configure(show="" if hidden else "•")
-        self.key_toggle.set_text("隐藏" if hidden else "显示")
+        self.key_toggle.set_text(t("Hide") if hidden else t("Show"))
 
     def _build_capture(self):
-        card, g = self._card("采集", "改完保存，采集进程会自动重启")
+        card, g = self._card(t("Capture"), t("Saving restarts the capture process automatically"))
         r = 0
-        self._row(g, r, "采样间隔（秒）", self._spin(g, "capture.interval_sec", 5, 300),
-                  "越小越细，但耗电与占空间更多"); r += 1
-        self._row(g, r, "空闲多少分钟后暂停", self._spin(g, "capture.idle_pause_sec_min", 1, 120),
-                  "没有键鼠动作就停止截图，避免记录空转"); r += 1
-        self._row(g, r, "同窗口最小截图间隔（秒）", self._spin(g, "capture.min_save_gap_sec", 10, 600)); r += 1
-        self._row(g, r, "JPEG 质量", self._spin(g, "capture.jpeg_quality", 30, 95),
-                  "62 左右在清晰度和体积间比较平衡"); r += 1
-        self._row(g, r, "保存截图证据", self._check(g, "privacy.store_screenshots", "保存（关闭后只记录窗口标题，日报会变粗）")); r += 1
+        self._row(g, r, t("Sample interval (s)"), self._spin(g, "capture.interval_sec", 5, 300),
+                  t("Smaller means finer detail, at the cost of power and disk")); r += 1
+        self._row(g, r, t("Pause after N minutes idle"), self._spin(g, "capture.idle_pause_sec_min", 1, 120),
+                  t("Stops capturing when there is no input, so idle time is not recorded")); r += 1
+        self._row(g, r, t("Min gap for the same window (s)"), self._spin(g, "capture.min_save_gap_sec", 10, 600)); r += 1
+        self._row(g, r, t("JPEG quality"), self._spin(g, "capture.jpeg_quality", 30, 95),
+                  t("Around 62 balances legibility and file size")); r += 1
+        self._row(g, r, t("Keep screenshots"), self._check(g, "privacy.store_screenshots", t("Keep (turning this off records titles only; reports get coarser)"))); r += 1
 
     def _build_ocr(self):
-        card, g = self._card("文字识别", "OCR 全在本机完成，截图不出本机")
+        card, g = self._card(t("OCR"), t("OCR runs entirely on this machine; screenshots never leave it"))
         r = 0
-        self._row(g, r, "引擎", self._combo(g, "ocr.engine",
+        self._row(g, r, t("Engine"), self._combo(g, "ocr.engine",
                                             ["auto", "rapidocr", "umi_http", "umi_cli", "none"]),
-                  "auto 优先 Umi，没有就用内置 RapidOCR；none 关闭识别"); r += 1
-        self._row(g, r, "每天最多识别多少张", self._spin(g, "ocr.max_per_day", 0, 5000, width=8),
-                  "控制模型输入量与耗时"); r += 1
-        self._row(g, r, "只识别活动窗口", self._check(g, "ocr.crop_active_window",
-                                                      "推荐开启：整屏缩小后字迹会糊")); r += 1
+                  t("auto prefers Umi, otherwise the bundled RapidOCR; none disables OCR")); r += 1
+        self._row(g, r, t("Max OCR calls per day"), self._spin(g, "ocr.max_per_day", 0, 5000, width=8),
+                  t("Caps model input size and processing time")); r += 1
+        self._row(g, r, t("OCR the active window only"), self._check(g, "ocr.crop_active_window",
+                                                      t("Recommended: full-screen captures blur small text"))); r += 1
 
     def _build_report(self):
-        card, g = self._card("日报与保留")
+        card, g = self._card(t("Reports & retention"))
         r = 0
-        self._row(g, r, "每天几点生成", self._spin(g, "report.trigger_hour", 0, 23),
-                  "默认 21:00，次日 04:05 再出终版"); r += 1
-        self._row(g, r, "有效活动低于多少分钟算空日", self._spin(g, "report.min_active_minutes", 0, 600)); r += 1
-        self._row(g, r, "生成后自动打开网页", self._check(g, "report.open_browser", "终版出报后打开浏览器看板")); r += 1
-        self._row(g, r, "发送前先给我看", self._check(g, "report.review_mode", "生成待审内容，确认后才外发"),
-                  "开启后到点只准备内容、不调用模型；需要在日报页点「审核并发送」"); r += 1
-        self._row(g, r, "截图保留天数", self._spin(g, "retention.shots_days", 1, 365),
-                  "过期只删截图，日报永久保留"); r += 1
-        self._row(g, r, "事件与 OCR 保留天数", self._spin(g, "retention.events_days", 1, 365)); r += 1
-        self._row(g, r, "报告 OCR 摘录保留天数", self._entry(g, "retention.report_excerpt_days", width=8),
-              "留空跟随事件期限；0 不保留。仅清除附录摘录，不删除日报叙述"); r += 1
-        self._row(g, r, "数据总量上限（GB）", self._spin(g, "retention.max_total_gb", 1, 500),
-                  "超了按最旧优先删截图"); r += 1
+        self._row(g, r, t("Report hour"), self._spin(g, "report.trigger_hour", 0, 23),
+                  t("21:00 by default; a final version follows at 04:05")); r += 1
+        self._row(g, r, t("Empty-day threshold (minutes)"), self._spin(g, "report.min_active_minutes", 0, 600)); r += 1
+        self._row(g, r, t("Open the dashboard after generating"), self._check(g, "report.open_browser", t("Open the dashboard when the final report is ready"))); r += 1
+        self._row(g, r, t("Review before sending"), self._check(g, "report.review_mode", t("Prepare content for review; send only after you confirm")),
+                  t("When on, the scheduled run only prepares content; nothing is sent until you hit \"Approve & send\" on the Reports page")); r += 1
+        self._row(g, r, t("Keep screenshots for (days)"), self._spin(g, "retention.shots_days", 1, 365),
+                  t("Expired screenshots are deleted; reports are kept forever")); r += 1
+        self._row(g, r, t("Keep events & OCR for (days)"), self._spin(g, "retention.events_days", 1, 365)); r += 1
+        self._row(g, r, t("Keep report OCR excerpts for (days)"), self._entry(g, "retention.report_excerpt_days", width=8),
+              t("Blank follows the event retention; 0 keeps none. Only appendix excerpts are removed, never the narrative")); r += 1
+        self._row(g, r, t("Total data cap (GB)"), self._spin(g, "retention.max_total_gb", 1, 500),
+                  t("Above the cap, the oldest screenshots go first")); r += 1
 
     def _build_privacy(self):
-        card, g = self._card("隐私", "暂停/完全屏蔽只留匿名状态；正则脱敏不能识别所有敏感信息")
+        card, g = self._card(t("Privacy"), t("Pause/block leaves only an anonymous state; regex redaction cannot catch everything"))
         r = 0
-        self._row(g, r, "截图范围", self._combo(g, "privacy.capture_scope", ["active_window", "all_screens"]),
-                  "默认活动窗口；全屏会包含后台窗口和副屏，请谨慎选择"); r += 1
-        self._row(g, r, "允许模型外发", self._check(g, "privacy.allow_llm", "允许发送脱敏后的标题与 OCR 摘要"),
-                  "关闭后仅生成本地时间线，连接测试也不发送请求"); r += 1
-        self._row(g, r, "不记录的应用", self._text(g, "privacy.blocked_apps", 3),
-                  "一行一个完整进程名，如 1Password.exe；不区分大小写"); r += 1
-        self._row(g, r, "仅记录应用及时长", self._text(g, "privacy.skip_ocr_apps", 3),
-                  "不存标题、不截图、不 OCR；旧记录重新生成时也会过滤"); r += 1
-        self._row(g, r, "标题关键词屏蔽", self._text(g, "privacy.blocked_title_patterns", 2),
-                  "每行一个正则；无效正则会拒绝保存，不会静默忽略"); r += 1
+        self._row(g, r, t("Capture scope"), self._combo(g, "privacy.capture_scope", ["active_window", "all_screens"]),
+                  t("Active window by default; all screens also captures background windows and other monitors")); r += 1
+        self._row(g, r, t("Allow sending to the model"), self._check(g, "privacy.allow_llm", t("Allow sending redacted titles and OCR excerpts")),
+                  t("When off, only a local timeline is built; even the connection test sends nothing")); r += 1
+        self._row(g, r, t("Apps never recorded"), self._text(g, "privacy.blocked_apps", 3),
+                  t("One process name per line, e.g. 1Password.exe; case-insensitive")); r += 1
+        self._row(g, r, t("Apps recorded as time only"), self._text(g, "privacy.skip_ocr_apps", 3),
+                  t("No title, no screenshot, no OCR; also filtered when older days are regenerated")); r += 1
+        self._row(g, r, t("Blocked title patterns"), self._text(g, "privacy.blocked_title_patterns", 2),
+                  t("One regex per line; an invalid one rejects the save instead of being ignored")); r += 1
 
     def _build_startup(self):
-        card, g = self._card("启动", "")
+        card, g = self._card(t("Startup"), "")
         r = 0
         box = tk.Frame(g, bg=CARD)
         self.start_var = tk.BooleanVar()
-        cb = tk.Checkbutton(box, text="开机登录后自动开始记录", variable=self.start_var,
+        cb = tk.Checkbutton(box, text=t("Start recording automatically at logon"), variable=self.start_var,
                             bg=CARD, fg=BODY, activebackground=CARD, selectcolor=CARD,
                             bd=0, highlightthickness=0, font=(FONT, 9), cursor="hand2",
                             command=self._toggle_autostart)
         cb.pack(side="left")
-        self._row(g, r, "开机自启", box, "免管理员权限，写入用户级计划任务或注册表 Run"); r += 1
+        self._row(g, r, t("Start with Windows"), box, t("No admin needed; registers a per-user scheduled task or a Run entry")); r += 1
         dir_lbl = tk.Label(g, text=str(paths.ROOT), bg=CARD, fg=MUTED, font=(FONT, 9), cursor="hand2")
         dir_lbl.bind("<Button-1>", lambda e: open_uri(str(paths.ROOT)))
-        self._row(g, r, "数据目录", dir_lbl, "点击打开文件夹")
+        self._row(g, r, t("Data folder"), dir_lbl, t("Click to open the folder"))
 
     # -------------------------------------------------- 读写
     def reload_form(self):
         cfg = cfgmod.load(reload=True)
+        lang_code = i18n.normalize(cfg.get("ui.language", i18n.DEFAULT_LOCALE))
+        try:
+            self.lang_var.set(f"{i18n.native_name(lang_code)} ({lang_code})")
+        except Exception:
+            pass
         getters = {
             "llm.base_url": lambda: str(cfg.get("llm.base_url", "")),
             "llm.model": lambda: str(cfg.get("llm.model", "")),
@@ -1594,21 +1635,22 @@ class SettingsPage(tk.Frame):
         except Exception:
             self.start_var.set(False)
         self.llm_hint.configure(
-            text=(cfg.error or ("已禁止模型外发；连接测试也已停用" if not cfg.get("privacy.allow_llm", True) else
-                  f"当前：{cfg.get('llm.model', '')} @ {cfg.get('llm.base_url', '')}　"
-                  + ("Key 已配置" if cfg.has_api_key() else "还没有 Key，日报会降级"))),
+            text=(cfg.error or (t("Sending is disabled, including the connection test") if not cfg.get("privacy.allow_llm", True) else
+                  t("Current: {model} @ {url}　", model=cfg.get("llm.model", ""),
+  url=cfg.get("llm.base_url", ""))
+                  + (t("Key configured") if cfg.has_api_key() else t("No key yet; reports will be degraded")))),
             fg=BAD_C if cfg.error else SUBTLE)
         if cfg.error:
-            self.save_hint.configure(text="配置无效：请打开配置文件修复；不会用占位默认值覆盖原文件", fg=BAD_C)
+            self.save_hint.configure(text=t("Invalid config: open the file and fix it. The placeholder defaults will not overwrite it."), fg=BAD_C)
 
     def _num(self, key: str, lo: int, hi: int, label: str) -> int:
         raw = str(self.vars[key].get()).strip()
         try:
             value = int(float(raw))
         except Exception:
-            raise ValueError(f"{label} 需要填数字，现在是「{raw}」")
+            raise ValueError(t("{label} must be a number; it is currently \"{raw}\"", label=label, raw=raw))
         if value < lo or value > hi:
-            raise ValueError(f"{label} 应在 {lo}–{hi} 之间")
+            raise ValueError(t("{label} should be between {lo} and {hi}", label=label, lo=lo, hi=hi))
         return value
 
     def _lines(self, key: str) -> list[str]:
@@ -1617,36 +1659,39 @@ class SettingsPage(tk.Frame):
         return [line.strip() for line in text.splitlines() if line.strip()]
 
     def _save(self):
+        lang_before = i18n.current()
+        lang_after = i18n.code_of_display(str(self.lang_var.get()))
         try:
             updates = {
                 "llm.base_url": str(self.vars["llm.base_url"].get()).strip(),
                 "llm.model": str(self.vars["llm.model"].get()).strip(),
-                "capture.interval_sec": self._num("capture.interval_sec", 5, 300, "采样间隔"),
-                "capture.idle_pause_sec": self._num("capture.idle_pause_sec_min", 1, 120, "空闲暂停") * 60,
-                "capture.min_save_gap_sec": self._num("capture.min_save_gap_sec", 10, 600, "最小截图间隔"),
-                "capture.jpeg_quality": self._num("capture.jpeg_quality", 30, 95, "JPEG 质量"),
+                "capture.interval_sec": self._num("capture.interval_sec", 5, 300, t("Interval")),
+                "capture.idle_pause_sec": self._num("capture.idle_pause_sec_min", 1, 120, t("Idle pause")) * 60,
+                "capture.min_save_gap_sec": self._num("capture.min_save_gap_sec", 10, 600, t("Min gap")),
+                "capture.jpeg_quality": self._num("capture.jpeg_quality", 30, 95, t("JPEG quality")),
                 "privacy.store_screenshots": bool(self.vars["privacy.store_screenshots"].get()),
                 "privacy.capture_scope": str(self.vars["privacy.capture_scope"].get()),
                 "privacy.allow_llm": bool(self.vars["privacy.allow_llm"].get()),
                 "ocr.engine": str(self.vars["ocr.engine"].get()),
-                "ocr.max_per_day": self._num("ocr.max_per_day", 0, 5000, "每天识别上限"),
+                "ocr.max_per_day": self._num("ocr.max_per_day", 0, 5000, t("Daily OCR cap")),
                 "ocr.crop_active_window": bool(self.vars["ocr.crop_active_window"].get()),
-                "report.trigger_hour": self._num("report.trigger_hour", 0, 23, "生成时间"),
-                "report.min_active_minutes": self._num("report.min_active_minutes", 0, 600, "空日阈值"),
+                "report.trigger_hour": self._num("report.trigger_hour", 0, 23, t("Report hour")),
+                "report.min_active_minutes": self._num("report.min_active_minutes", 0, 600, t("Empty-day threshold")),
                 "report.open_browser": bool(self.vars["report.open_browser"].get()),
                 "report.review_mode": bool(self.vars["report.review_mode"].get()),
-                "retention.shots_days": self._num("retention.shots_days", 1, 365, "截图保留天数"),
-                "retention.events_days": self._num("retention.events_days", 1, 365, "事件保留天数"),
-                "retention.max_total_gb": self._num("retention.max_total_gb", 1, 500, "总量上限"),
+                "retention.shots_days": self._num("retention.shots_days", 1, 365, t("Keep screenshots for (days)")),
+                "retention.events_days": self._num("retention.events_days", 1, 365, t("Event retention")),
+                "retention.max_total_gb": self._num("retention.max_total_gb", 1, 500, t("Total cap")),
                 "privacy.blocked_apps": self._lines("privacy.blocked_apps"),
                 "privacy.skip_ocr_apps": self._lines("privacy.skip_ocr_apps"),
                 "privacy.blocked_title_patterns": self._lines("privacy.blocked_title_patterns"),
+                "ui.language": lang_after,
             }
             if not updates["llm.base_url"] or not updates["llm.model"]:
-                raise ValueError("接口地址和模型名不能为空")
+                raise ValueError(t("Endpoint and model are required"))
             excerpt_days = str(self.vars["retention.report_excerpt_days"].get()).strip()
             if excerpt_days and (not excerpt_days.isdecimal() or int(excerpt_days) > 36500):
-                raise ValueError("报告摘录天数应为 0–36500 的整数；留空跟随事件期限")
+                raise ValueError(t("Report excerpt days must be an integer 0-36500; leave blank to follow event retention"))
             updates["retention.report_excerpt_days"] = int(excerpt_days) if excerpt_days else None
         except ValueError as exc:
             self.app.toast(str(exc), "warn")
@@ -1656,25 +1701,28 @@ class SettingsPage(tk.Frame):
             cfgmod.save_values(updates)
             cfgmod.save_api_key(str(self.vars["llm.key"].get()))
         except (OSError, ValueError, privacy.PrivacyError) as exc:
-            self.save_hint.configure(text=f"保存未完成：{exc}", fg=BAD_C)
-            self.app.toast("保存未完成，请检查配置及文件权限；未重启采集", "warn")
+            self.save_hint.configure(text=t("Save did not complete: {e}", e=exc), fg=BAD_C)
+            self.app.toast(t("Save did not complete. Check the config and file permissions; capture was not restarted."), "warn")
             return
-        self.save_hint.configure(text="已保存 · 正在重启采集以应用新设置…", fg=OK_C)
-        self.app.toast("设置已保存")
+        self.save_hint.configure(text=t("Saved · restarting capture to apply the new settings…"), fg=OK_C)
+        self.app.toast(t("Settings saved"))
 
         hb = status.heartbeat()
         if hb["alive"]:
             self.app.run_bg(control.restart, self._after_restart)
         else:
-            self.save_hint.configure(text="已保存 · 采集当前没在运行，下次启动即生效", fg=SUBTLE)
+            self.save_hint.configure(text=t("Saved · capture is not running; the change applies on its next start"), fg=SUBTLE)
         self.reload_form()
+        if lang_after != lang_before:
+            # 语言变了：整窗重建一次，否则只有新控件是英文、旧的还是中文
+            self.app.relaunch()
 
     def _after_restart(self, kind: str, payload):
         if kind == "ok":
             ok, msg = payload
-            self.save_hint.configure(text=f"已保存 · {msg}", fg=OK_C if ok else WARN_C)
+            self.save_hint.configure(text=t("Saved · {msg}", msg=msg), fg=OK_C if ok else WARN_C)
         else:
-            self.save_hint.configure(text=f"已保存，但重启采集失败：{payload}", fg=WARN_C)
+            self.save_hint.configure(text=t("Saved, but the capture process failed to restart: {p}", p=payload), fg=WARN_C)
 
     def _toggle_autostart(self):
         want = bool(self.start_var.get())
@@ -1687,7 +1735,7 @@ class SettingsPage(tk.Frame):
             self.start_var.set(bool(autostart.status().get("installed")))
             self.app.invalidate_autostart()
         except Exception as exc:
-            self.app.toast(f"自启设置失败：{exc}", "warn")
+            self.app.toast(t("Autostart setting failed: {e}", e=exc), "warn")
             self.start_var.set(not want)
 
     def _test_llm(self):
@@ -1698,38 +1746,38 @@ class SettingsPage(tk.Frame):
             self.app.toast(saved_cfg.error, "warn")
             return
         if not saved_cfg.get("privacy.allow_llm", True) or not self.vars["privacy.allow_llm"].get():
-            self.app.toast("已禁止模型外发；如需测试，请先明确允许外发并保存设置", "warn")
+            self.app.toast(t("Sending to the model is disabled. Allow it and save the settings first if you want to test."), "warn")
             return
         base = str(self.vars["llm.base_url"].get()).strip()
         model = str(self.vars["llm.model"].get()).strip()
         key = str(self.vars["llm.key"].get()).strip()
         if not base or not model:
-            self.app.toast("先填接口地址和模型名", "warn")
+            self.app.toast(t("Fill in the endpoint and model first"), "warn")
             return
         if (base.rstrip("/") != str(saved_cfg.get("llm.base_url", "")).rstrip("/")
                 or model != saved_cfg.get("llm.model")):
-            self.app.toast("接口或模型已修改，请先保存设置，再测试连接", "warn")
+            self.app.toast(t("Endpoint or model changed; save the settings before testing"), "warn")
             return
         if not key:
-            self.app.toast("先填 API Key", "warn")
+            self.app.toast(t("Enter an API key first"), "warn")
             return
-        self.llm_hint.configure(text="正在连接…", fg=MUTED)
+        self.llm_hint.configure(text=t("Connecting…"), fg=MUTED)
 
         def work():
             client = llm.LLMClient(saved_cfg, self.app.log)
             client.api_key = key
             client.timeout = 25
             client.max_retries = 1
-            client.chat_json("你是连通性测试助手。", '请只输出 JSON：{"ok": true}', max_tokens=20)
+            client.chat_json(t("You are a connectivity test assistant."), t("Output only JSON: {\"ok\": true}"), max_tokens=20)
             return model
 
         def done(kind, payload):
             if kind == "ok":
-                self.llm_hint.configure(text=f"连接正常 · {payload}", fg=OK_C)
-                self.app.toast("模型连接正常")
+                self.llm_hint.configure(text=t("Connection OK · {p}", p=payload), fg=OK_C)
+                self.app.toast(t("Model connection OK"))
             else:
-                self.llm_hint.configure(text=f"连接失败 · {payload}", fg=BAD_C)
-                self.app.toast("模型连接失败，看下方红字", "warn")
+                self.llm_hint.configure(text=t("Connection failed · {p}", p=payload), fg=BAD_C)
+                self.app.toast(t("Model connection failed - see the red text below"), "warn")
 
         self.app.run_bg(work, done)
 
@@ -1744,11 +1792,11 @@ class DiagPage(tk.Frame):
 
         bar = tk.Frame(wrap, bg=BG)
         bar.pack(fill="x")
-        FlatButton(bar, "重新自检", self.run_doctor, "primary").pack(side="left")
-        FlatButton(bar, "OCR 实测", self.run_ocr, "ghost").pack(side="left", padx=(px(8), 0))
-        FlatButton(bar, "打开日志目录", lambda: open_uri(str(paths.LOGS)), "ghost").pack(side="left", padx=(px(8), 0))
-        FlatButton(bar, "打开数据目录", lambda: open_uri(str(paths.ROOT)), "ghost").pack(side="left", padx=(px(8), 0))
-        FlatButton(bar, "清理预览", self.run_clean, "ghost").pack(side="left", padx=(px(8), 0))
+        FlatButton(bar, t("Run checks"), self.run_doctor, "primary").pack(side="left")
+        FlatButton(bar, t("OCR test"), self.run_ocr, "ghost").pack(side="left", padx=(px(8), 0))
+        FlatButton(bar, t("Open log folder"), lambda: open_uri(str(paths.LOGS)), "ghost").pack(side="left", padx=(px(8), 0))
+        FlatButton(bar, t("Open data folder"), lambda: open_uri(str(paths.ROOT)), "ghost").pack(side="left", padx=(px(8), 0))
+        FlatButton(bar, t("Cleanup preview"), self.run_clean, "ghost").pack(side="left", padx=(px(8), 0))
         self.summary = tk.Label(bar, text="", bg=BG, fg=MUTED, font=(FONT, 9))
         self.summary.pack(side="right")
 
@@ -1757,7 +1805,7 @@ class DiagPage(tk.Frame):
         self.sf = ScrollFrame(card.body, CARD)
         self.sf.pack(fill="both", expand=True, padx=px(14), pady=px(12))
         self.hint = None
-        self._set_hint("点「重新自检」检查环境")
+        self._set_hint(t("Hit \"Run checks\" to inspect the environment"))
 
     def _set_hint(self, text: str):
         self.hint = tk.Label(self.sf.body, text=text, bg=CARD, fg=SUBTLE, font=(FONT, 9),
@@ -1766,7 +1814,7 @@ class DiagPage(tk.Frame):
 
     def run_doctor(self):
         self._clear()
-        self._set_hint("正在自检…")
+        self._set_hint(t("Running checks…"))
         self.app.run_bg(lambda: doctor.run(cfgmod.load(reload=True)), self._show)
 
     def _clear(self):
@@ -1777,11 +1825,12 @@ class DiagPage(tk.Frame):
     def _show(self, kind: str, payload):
         self._clear()
         if kind != "ok":
-            tk.Label(self.sf.body, text=f"自检失败：{payload}", bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
+            tk.Label(self.sf.body, text=t("Checks failed: {p}", p=payload), bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
             return
         rows = payload
         s = doctor.summary(rows)
-        self.summary.configure(text=f"{s['ok']} 正常 / {s['warn']} 提醒 / {s['fail']} 失败")
+        self.summary.configure(text=t("{ok} ok / {warn} warnings / {fail} failed",
+  ok=s["ok"], warn=s["warn"], fail=s["fail"]))
         for level, name, detail in rows:
             color = OK_C if level == doctor.OK else (WARN_C if level == doctor.WARN else BAD_C)
             row = tk.Frame(self.sf.body, bg=CARD)
@@ -1796,7 +1845,7 @@ class DiagPage(tk.Frame):
 
     def run_ocr(self):
         self._clear()
-        self._set_hint("正在截屏并识别（首次调用要加载模型，约 5-15 秒）…")
+        self._set_hint(t("Capturing and running OCR (the first run loads the model, 5-15 s)…"))
 
         def work():
             import ocr
@@ -1808,22 +1857,22 @@ class DiagPage(tk.Frame):
     def _show_ocr(self, kind: str, payload):
         self._clear()
         if kind != "ok":
-            tk.Label(self.sf.body, text=f"识别失败：{payload}", bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
+            tk.Label(self.sf.body, text=t("OCR failed: {p}", p=payload), bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
             return
         res = payload
-        head = f"引擎 {res.get('engine') or '—'} · 状态 {res.get('status')} · 耗时 {res.get('ms')} ms · {len(res.get('text') or '')} 字"
+        head = t("engine {engine} · status {status} · {ms} ms · {chars} chars", engine=res.get("engine") or "—", status=res.get("status"), ms=res.get("ms"), chars=len(res.get("text") or ""))
         tk.Label(self.sf.body, text=head, bg=CARD, fg=TEXT, font=(FONT, 9, "bold")).pack(anchor="w")
         if res.get("error"):
             tk.Label(self.sf.body, text=res["error"], bg=CARD, fg=BAD_C, font=(FONT, 8)).pack(anchor="w", pady=(px(4), 0))
         body = tk.Text(self.sf.body, height=14, bg="#fbfcfe", fg=BODY, bd=1, relief="flat",
                        font=(MONO, 9), wrap="word", highlightbackground=LINE, highlightthickness=1)
         body.pack(fill="both", expand=True, pady=(px(8), 0))
-        body.insert("1.0", (res.get("text") or "（没有识别到文字）")[:3000])
+        body.insert("1.0", (res.get("text") or t("(no text recognized)"))[:3000])
         body.configure(state="disabled")
 
     def run_clean(self):
         self._clear()
-        self._set_hint("正在统计可清理的数据（不会真的删除）…")
+        self._set_hint(t("Measuring reclaimable data (nothing is deleted)…"))
 
         def work():
             import retention
@@ -1833,21 +1882,22 @@ class DiagPage(tk.Frame):
         def done(kind, payload):
             self._clear()
             if kind != "ok":
-                tk.Label(self.sf.body, text=f"清理预览失败：{payload}", bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
+                tk.Label(self.sf.body, text=t("Cleanup preview failed: {p}", p=payload), bg=CARD, fg=BAD_C, font=(FONT, 9)).pack(anchor="w")
                 return
             s = payload or {}
             if s.get("status") == "busy":
-                self._set_hint(s.get("reason", "已有报告任务运行，请稍后预览"), WARN_C)
+                self._set_hint(s.get("reason", t("A report job is already running; try the preview again shortly")), WARN_C)
                 return
             lines = [
-                f"可删除截图 {s.get('removed_shots', 0)} 张",
-                f"可释放空间 {s.get('freed_mb', 0):.0f} MB",
-                f"整日目录过期 {len(s.get('removed_days') or [])} 天"
+                t("{n} screenshots can be deleted", n=s.get("removed_shots", 0)),
+                t("{mb:.0f} MB can be freed", mb=s.get("freed_mb", 0)),
+                t("{n} expired day folders", n=len(s.get("removed_days") or []))
                 + (f"（{', '.join(s.get('removed_days') or [])[:120]}）" if s.get("removed_days") else ""),
-                f"可清除 {len(s.get('excerpt_reports') or [])} 份报告中的 {s.get('excerpt_blocks', 0)} 条 OCR 摘录",
+                t("{b} OCR excerpts in {r} reports can be cleared",
+  b=s.get("excerpt_blocks", 0), r=len(s.get("excerpt_reports") or [])),
                 "",
-                "这只是预览；不会删除文件。自动清理由采集进程在 clean_hour 后执行（默认 04:00 后）。",
-                "只清除本地报告附录的 OCR 摘录；叙述、标题、外部文件与 Obsidian 副本不在此范围。",
+                t("Preview only; no files are deleted. Automatic cleanup runs in the capture process after clean_hour (04:00 by default)."),
+                t("Only OCR excerpts in the local report appendix are cleared; narrative, titles, external references and Obsidian copies are untouched."),
                 *(s.get("errors") or []),
             ]
             for line in lines:
@@ -1858,8 +1908,8 @@ class DiagPage(tk.Frame):
 
 
 # ---------------------------------------------------------------- 主窗口
-NAV = [("dash", "概览", "dash"), ("reports", "日报", "report"),
-       ("settings", "设置", "gear"), ("diag", "诊断", "pulse")]
+NAV = [("dash", t("Overview"), "dash"), ("reports", t("Reports"), "report"),
+       ("settings", t("Settings"), "gear"), ("diag", t("Diagnostics"), "pulse")]
 
 
 class App(tk.Tk):
@@ -1888,6 +1938,7 @@ class App(tk.Tk):
         self.tray = None                 # 系统托盘（装不上就退化成「关窗口=退出」）
         self._tray_hint = False
         self._autostarted = False
+        self.relaunch_requested = False   # 改语言后要求整窗重建
 
         self._setup_window()
         self._setup_style()
@@ -1971,7 +2022,7 @@ class App(tk.Tk):
         box.pack(side="left", padx=(px(10), 0))
         tk.Label(box, text="What-IDid", bg=SIDEBAR, fg="#f8fafc",
                  font=(FONT, 12, "bold")).pack(anchor="w")
-        tk.Label(box, text="自动工作记录", bg=SIDEBAR, fg="#7c8698", font=(FONT, 8)).pack(anchor="w")
+        tk.Label(box, text=t("Automatic work log"), bg=SIDEBAR, fg="#7c8698", font=(FONT, 8)).pack(anchor="w")
 
         self.nav_items = {}
         for key, label, icon in NAV:
@@ -2016,9 +2067,9 @@ class App(tk.Tk):
         self.pill.pack(side="right")
         self.pill_dot = tk.Canvas(self.pill, width=px(9), height=px(9), bg="#ffffff", highlightthickness=0)
         self.pill_dot.pack(side="left", padx=(px(10), px(6)), pady=px(7))
-        self.pill_lbl = tk.Label(self.pill, text="检查中", bg="#ffffff", fg=MUTED, font=(FONT, 8))
+        self.pill_lbl = tk.Label(self.pill, text=t("Checking"), bg="#ffffff", fg=MUTED, font=(FONT, 8))
         self.pill_lbl.pack(side="left", padx=(0, px(10)))
-        FlatButton(pill, "刷新", lambda: self.refresh(force=True), "ghost", padx=10, pady=5, font_size=9).pack(side="right", padx=(0, px(8)))
+        FlatButton(pill, t("Refresh"), lambda: self.refresh(force=True), "ghost", padx=10, pady=5, font_size=9).pack(side="right", padx=(0, px(8)))
 
         self.container = tk.Frame(main, bg=BG)
         self.container.pack(fill="both", expand=True)
@@ -2089,14 +2140,14 @@ class App(tk.Tk):
             item["bar"].configure(bg=ACCENT if sel else bg)
             item["icon"].configure(bg=bg)
         titles = {
-            "dash": ("概览", "今天在做什么，一眼看完"),
-            "reports": ("日报", "每天的记录、成果与可回溯的证据"),
-            "settings": ("设置", "采集、识别、模型与隐私"),
-            "diag": ("诊断", "出问题时先看这里"),
+            "dash": (t("Overview"), t("Today at a glance")),
+            "reports": (t("Reports"), t("Daily records, outcomes and traceable evidence")),
+            "settings": (t("Settings"), t("Capture, OCR, model and privacy")),
+            "diag": (t("Diagnostics"), t("Start here when something looks wrong")),
         }
-        t, s = titles.get(key, ("", ""))
-        self.title_lbl.configure(text=t)
-        self.sub_lbl.configure(text=s)
+        head, sub = titles.get(key, ("", ""))
+        self.title_lbl.configure(text=head)
+        self.sub_lbl.configure(text=sub)
         if key == "reports":
             self.refresh_reports()
         if key == "settings":
@@ -2122,7 +2173,7 @@ class App(tk.Tk):
         self.pages["dash"].refresh(self.snap)
         self._update_tray_tip()
         if prev is False and self.snap["today_report"]["exists"]:
-            self.toast("今日日报已生成，切到「日报」就能看", "ok")
+            self.toast(t("Today's report is ready - switch to \"Reports\""), "ok")
         if self.current == "reports":
             self.refresh_reports()
 
@@ -2136,15 +2187,15 @@ class App(tk.Tk):
         hb = self.snap["heartbeat"]
         pause = self.snap["paused"]
         if self._busy:
-            text, color = "处理中…", ACCENT
+            text, color = t("Working…"), ACCENT
         elif self.snap.get("privacy_error"):
-            text, color = "配置错误 · 已停止内容处理", BAD_C
+            text, color = t("Config error · content processing stopped"), BAD_C
         elif pause:
-            text, color = "已暂停", WARN_C
+            text, color = t("Paused"), WARN_C
         elif hb["alive"]:
-            text, color = f"记录中 · {hb['age']}s", OK_C
+            text, color = t("Recording · {age}s", age=hb["age"]), OK_C
         else:
-            text, color = "未运行", BAD_C
+            text, color = t("Not running"), BAD_C
         self.pill_lbl.configure(text=text, fg=color if self._busy or hb["alive"] or pause else MUTED)
         self.pill_dot.delete("all")
         self.pill_dot.create_oval(0, 0, px(9), px(9), fill=color, outline="")
@@ -2228,7 +2279,7 @@ class App(tk.Tk):
 
         def done(kind, payload):
             if kind != "ok":
-                self.toast(f"启动失败：{payload}", "warn")
+                self.toast(t("Start failed: {p}", p=payload), "warn")
                 return
             ok, msg = payload
             self.toast(msg, "ok" if ok else "info")
@@ -2239,7 +2290,7 @@ class App(tk.Tk):
     def stop_daemon(self):
         def done(kind, payload):
             if kind != "ok":
-                self.toast(f"停止失败：{payload}", "warn")
+                self.toast(t("Stop failed: {p}", p=payload), "warn")
                 return
             ok, msg = payload
             self.toast(msg, "ok" if ok else "warn")
@@ -2261,7 +2312,7 @@ class App(tk.Tk):
         try:
             msg = autostart.install(cfgmod.load(reload=True))
         except Exception as exc:
-            self.toast(f"注册失败：{exc}", "warn")
+            self.toast(t("Registration failed: {e}", e=exc), "warn")
             return
         self.toast(msg, "ok")
         self.invalidate_autostart()
@@ -2269,7 +2320,7 @@ class App(tk.Tk):
     def generate(self, day: str | None = None, force: bool = True):
         day = day or (self.snap.get("workday") if self.snap else None) or \
             timeutil.workday_of(timeutil.now(), cfgmod.load().cutoff_hour)
-        self.toast(f"正在生成 {day} 的日报…")
+        self.toast(t("Generating the report for {day}…", day=day))
 
         def work():
             import report as report_mod
@@ -2284,26 +2335,26 @@ class App(tk.Tk):
 
         def done(kind, payload):
             if kind != "ok":
-                self.toast(f"生成失败：{payload}", "warn")
+                self.toast(t("Generation failed: {p}", p=payload), "warn")
                 return
             res = payload or {}
             st = res.get("status")
             if st == "ok":
-                self.toast(f"{day} 日报已生成")
+                self.toast(t("Report for {day} is ready", day=day))
             elif st == "degraded":
-                self.toast(res.get("degraded_reason") or "已生成本地时间线版", "warn")
+                self.toast(res.get("degraded_reason") or t("Local timeline version generated"), "warn")
             elif st == "nodata":
-                self.toast(f"{day} 没有可用记录，先让它跑一会儿")
+                self.toast(t("{day} has no usable records yet; let it run for a while", day=day))
             elif st == "busy":
-                self.toast("另一份日报正在生成，稍等几秒")
+                self.toast(t("Another report is being generated; give it a few seconds"))
             elif st == "empty":
-                self.toast(f"{day} 有效活动太少，判为空日")
+                self.toast(t("{day} had too little activity; treated as an empty day", day=day))
             elif st == "skipped":
-                self.toast("已有新版本，无需重跑")
+                self.toast(t("A newer version exists; no rerun needed"))
             elif st == "awaiting_review":
-                self.toast("已生成待审内容，到「日报」页确认后才会外发", "info")
+                self.toast(t("Content prepared for review; nothing is sent until you confirm on the Reports page"), "info")
             else:
-                self.toast(f"生成结束：{res.get('status') or res.get('reason') or '未知状态'}", "warn")
+                self.toast(t("Finished: {st}", st=res.get("status") or res.get("reason") or t("Unknown state")), "warn")
             self.refresh(force=True)
             self.refresh_reports()
             if st in ("ok", "degraded", "empty", "awaiting_review"):
@@ -2314,7 +2365,7 @@ class App(tk.Tk):
 
     def approve_review(self, day: str):
         """按用户确认过的内容真正外发：发送的必须就是刚才预览的那一份。"""
-        self.toast(f"正在按确认的内容生成 {day} 的日报…")
+        self.toast(t("Generating the report for {day} from the confirmed content…", day=day))
 
         def work():
             import report as report_mod
@@ -2330,18 +2381,18 @@ class App(tk.Tk):
 
         def done(kind, payload):
             if kind != "ok":
-                self.toast(f"发送失败：{payload}", "warn")
+                self.toast(t("Send failed: {p}", p=payload), "warn")
                 return
             res = payload or {}
             st = res.get("status")
             if st == "ok":
-                self.toast(f"{day} 日报已生成")
+                self.toast(t("Report for {day} is ready", day=day))
             elif st == "degraded":
-                self.toast(res.get("degraded_reason") or "已生成本地时间线版", "warn")
+                self.toast(res.get("degraded_reason") or t("Local timeline version generated"), "warn")
             elif st == "awaiting_review":
-                self.toast("仍处于审核模式，请重新确认", "warn")
+                self.toast(t("Still in review mode; please confirm again"), "warn")
             else:
-                self.toast(f"生成结束：{st or '未知状态'}", "warn")
+                self.toast(t("Finished: {st}", st=st or t("Unknown state")), "warn")
             self.refresh(force=True)
             self.refresh_reports()
             self.pages["reports"].select(day)
@@ -2360,14 +2411,15 @@ class App(tk.Tk):
 
         def done(kind, payload):
             if kind != "ok":
-                self.toast(f"删除失败：{payload}", "warn")
+                self.toast(t("Delete failed: {p}", p=payload), "warn")
                 return
             res = payload or {}
             removed = len(res.get("derived") or [])
-            self.toast(f"已遗忘 {day}（删除 {removed} 项），已经外发的内容无法撤回", "ok")
+            self.toast(t("Forgot {day} ({n} items deleted); content already sent cannot be recalled",
+  day=day, n=removed), "ok")
             self.refresh(force=True)
             self.refresh_reports()
-            self.pages["reports"].show_placeholder(f"{day} 的记录已删除", day=day)
+            self.pages["reports"].show_placeholder(t("Records for {day} deleted", day=day), day=day)
 
         self.run_bg(work, done)
 
@@ -2377,7 +2429,7 @@ class App(tk.Tk):
         if not (target and target.exists()):
             target = paths.WEB / "index.html"
         if not target.exists():
-            self.toast("还没有生成看板，先点「立即生成日报」", "warn")
+            self.toast(t("No dashboard yet. Hit \"Generate report now\" first."), "warn")
             return
         open_uri(str(target))
 
@@ -2386,7 +2438,7 @@ class App(tk.Tk):
         page = self.pages["reports"]
         page.select(day)
         if day not in page._rows:
-            self.toast(f"{day} 还没有日报")
+            self.toast(t("No report for {day} yet", day=day))
 
     # -------------------------------------------------- 生命周期
     def _reveal(self):
@@ -2413,19 +2465,19 @@ class App(tk.Tk):
         try:
             import tray as traymod
 
-            t = traymod.Tray(
+            icon = traymod.Tray(
                 self,
                 paths.BUNDLE / "assets" / "app.ico",
-                tip="What-IDid · 工作记录",
+                tip=t("What-IDid · Work Log"),
                 on_command=self._tray_command,
                 on_activate=self._restore_window,
             )
-            if t.install():
-                self.tray = t
-                t.set_menu(self._tray_menu())
+            if icon.install():
+                self.tray = icon
+                icon.set_menu(self._tray_menu())
                 self._update_tray_tip()
             else:
-                self.log and self.log.warning("托盘图标没装上：%s", t.last_error)
+                self.log and self.log.warning(t("Tray icon failed to install: %s"), icon.last_error)
         except Exception:
             traceback.print_exc()
 
@@ -2434,19 +2486,19 @@ class App(tk.Tk):
         running = bool(snap.get("running"))
         paused = bool(snap.get("paused"))
         if running:
-            collect = "暂停采集 30 分钟"
+            collect = t("Pause capture for 30 minutes")
         elif paused:
-            collect = "恢复采集"
+            collect = t("Resume capture")
         else:
-            collect = "开始采集"
+            collect = t("Start capture")
         return [
-            ("打开主窗口", CMD_SHOW, True),
+            (t("Open main window"), CMD_SHOW, True),
             ("-", 0, False),
             (collect, CMD_COLLECT, True),
-            ("立即生成今日日报", CMD_REPORT, bool(snap.get("has_key"))),
-            ("诊断与清理", CMD_DIAG, True),
+            (t("Generate today's report now"), CMD_REPORT, bool(snap.get("has_key"))),
+            (t("Diagnostics & cleanup"), CMD_DIAG, True),
             ("-", 0, False),
-            ("退出（停止采集）", CMD_QUIT, True),
+            (t("Quit (stops capture)"), CMD_QUIT, True),
         ]
 
     def _tray_command(self, cmd: int):
@@ -2483,11 +2535,11 @@ class App(tk.Tk):
             return
         self.tray.set_menu(self._tray_menu())
         if snap.get("running"):
-            tip = "What-IDid · 正在记录"
+            tip = t("What-IDid · Recording")
         elif snap.get("paused"):
-            tip = "What-IDid · 已暂停"
+            tip = t("What-IDid · Paused")
         else:
-            tip = "What-IDid · 采集未运行"
+            tip = t("What-IDid · Capture stopped")
         self.tray.set_tip(tip)
 
     def _restore_window(self):
@@ -2515,7 +2567,7 @@ class App(tk.Tk):
             return
         ok, _msg = control.start()
         if ok:
-            self.toast("采集已在后台启动，关掉窗口也会继续记录")
+            self.toast(t("Capture started in the background; closing the window keeps it running"))
             self.refresh(force=True)
 
     def _shot_when_idle(self, path: str, tries: int = 60):
@@ -2553,7 +2605,7 @@ class App(tk.Tk):
             reason = privacy.capture_reason(cfg, fg, 0, winapi.is_locked(), force=True)
             if (reason or privacy.should_skip_ocr(fg.get("app", ""), cfg)
                     or fg.get("pid") != os.getpid()):
-                raise privacy.PrivacyError("隐私策略或前台窗口状态不允许导出界面截图")
+                raise privacy.PrivacyError(t("The privacy policy or the foreground window does not allow exporting a screenshot"))
             self.pages["settings"].key_entry.configure(show="•")
             self.update_idletasks()
 
@@ -2564,7 +2616,7 @@ class App(tk.Tk):
             if (privacy.capture_reason(latest, fg, 0, winapi.is_locked(), force=True)
                     or not capture.same_foreground(fg, winapi.foreground_info())
                     or cfg.get("privacy", {}) != latest.get("privacy", {})):
-                raise privacy.PrivacyError("截图期间窗口或隐私策略变化，未导出图像")
+                raise privacy.PrivacyError(t("The window or privacy policy changed during capture; no image was exported"))
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             im.save(path)
             print(f"[shot] {path} {im.size}")
@@ -2579,8 +2631,8 @@ class App(tk.Tk):
             self.withdraw()
             if not self._tray_hint:
                 self._tray_hint = True
-                self.tray.notify("What-IDid 还在后台记录",
-                                 "右键托盘图标可以重新打开或退出（没看到就点任务栏的 ^）")
+                self.tray.notify(t("What-IDid is still recording in the background"),
+                                 t("Right-click the tray icon to reopen or quit (look under ^ in the taskbar)"))
             return
         self._quit()
 
@@ -2592,10 +2644,8 @@ class App(tk.Tk):
             if hidden:
                 self.deiconify()
             ok = messagebox.askyesno(
-                "退出 What-IDid",
-                "退出会停止采集。已经记录的内容都会保留，\n"
-                "下次打开可以继续。\n\n"
-                "如果只想收起界面、让它继续记录，点「否」。",
+                t("Quit What-IDid"),
+                t("Quitting stops capture. Everything recorded so far is kept, and it carries on next time.\n\nIf you only want to hide the window and keep recording, choose \"No\"."),
                 parent=self)
             if not ok:
                 if hidden:
@@ -2605,6 +2655,22 @@ class App(tk.Tk):
             control.stop()
         except Exception:
             pass
+        if self.tray is not None:
+            try:
+                self.tray.remove()
+            except Exception:
+                pass
+            self.tray = None
+        self._release_lock()
+        self.destroy()
+
+    def relaunch(self):
+        """换语言后整窗重建。
+
+        不另起进程：新进程会和本进程抢 gui.lock，结果是新窗口一闪就退、
+        旧窗口也跟着关掉。改由 main() 的循环重建一次，数据与托盘都留在进程内。
+        """
+        self.relaunch_requested = True
         if self.tray is not None:
             try:
                 self.tray.remove()
@@ -2656,6 +2722,22 @@ def _single_instance():
     return None
 
 
+def _apply_locale() -> str:
+    """按配置切界面语言。
+
+    窗口标题也要跟着变，而且它参与 `FindWindowW` 的单实例查找，所以必须在这里
+    一起改，不能只改控件文案。
+    """
+    global TITLE
+    try:
+        code = cfgmod.load(reload=True).get("ui.language", i18n.DEFAULT_LOCALE)
+    except Exception:
+        code = i18n.DEFAULT_LOCALE
+    i18n.set_locale(code)
+    TITLE = t("What-IDid · Work Log")
+    return i18n.current()
+
+
 def main(shot_path: str | None = None, shot_page: str | None = None,
          shot_day: str | None = None) -> int:
     import sys
@@ -2672,27 +2754,32 @@ def main(shot_path: str | None = None, shot_page: str | None = None,
     except Exception:
         pass
 
-    handle = _single_instance()
-    if handle is None:
-        print("已经在运行，已切到前台")
-        return 0
+    # 界面文案的语言：默认英文，配置里 ui.language 可以是 zh-CN / auto
+    _apply_locale()
+    while True:
+        handle = _single_instance()
+        if handle is None:
+            print(t("Already running; switched to the foreground"))
+            return 0
 
-    app = App(shot_path=shot_path, shot_page=shot_page, shot_day=shot_day)
-    app._lock_handle = handle
-    try:
-        app.mainloop()
-    finally:
+        app = App(shot_path=shot_path, shot_page=shot_page, shot_day=shot_day)
+        app._lock_handle = handle
         try:
-            if app.tray is not None:
-                app.tray.remove()
-        except Exception:
-            pass
-        try:
-            if app._lock_handle:
-                app._lock_handle.close()
-        except Exception:
-            pass
-    return 0
+            app.mainloop()
+        finally:
+            try:
+                if app.tray is not None:
+                    app.tray.remove()
+            except Exception:
+                pass
+            try:
+                if app._lock_handle:
+                    app._lock_handle.close()
+            except Exception:
+                pass
+        if not app.relaunch_requested:
+            return 0
+        _apply_locale()          # 语言变了：重新读配置，再开一轮窗口
 
 
 if __name__ == "__main__":

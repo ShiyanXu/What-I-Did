@@ -1,30 +1,30 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{ lang or 'en' }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ day }} 工作日报 · What-I-Did</title>
+<title>{{ t("{day} daily report · What-I-Did", day=day) }}</title>
 {% include "_style.html.j2" %}
 </head>
 <body>
 <div class="wrap">
 
-  <a class="back" href="../index.html">← 返回看板</a>
+  <a class="back" href="../index.html">← {{ t("Back to dashboard") }}</a>
 
   <header class="hero">
     <div class="hero-top">
       <h1>{{ day }}<span class="wd">{{ weekday }}</span></h1>
       <div class="badges">
-        {% if d.status == 'ok' %}<span class="badge ok">模型生成</span>
-        {% elif d.status == 'degraded' %}<span class="badge warn">降级 · 仅时间线</span>
-        {% else %}<span class="badge mute">空日</span>{% endif %}
-        <span class="badge">{{ {'auto':'21:00 自动','manual':'手动生成','catchup':'开机补跑','finalize':'次日终版'}.get(d.reason, d.reason) }}</span>
+        {% if d.status == 'ok' %}<span class="badge ok">{{ t("Model-generated") }}</span>
+        {% elif d.status == 'degraded' %}<span class="badge warn">{{ t("Degraded · timeline only") }}</span>
+        {% else %}<span class="badge mute">{{ t("Empty day") }}</span>{% endif %}
+        <span class="badge">{{ {'auto': t("Auto at 21:00"), 'manual': t("Manual"), 'catchup': t("Catch-up on boot"), 'finalize': t("Final, next day")}.get(d.reason, d.reason) }}</span>
         <span class="badge">{{ d.coverage.note or d.coverage.window }}</span>
-        <span class="badge">第 {{ d.revision }} 版</span>
-        {% if d.report.confidence %}<span class="badge">置信度 {{ d.report.confidence }}</span>{% endif %}
+        <span class="badge">{{ t("Revision {n}", n=d.revision) }}</span>
+        {% if d.report.confidence %}<span class="badge">{{ t("Confidence {level}", level=d.report.confidence) }}</span>{% endif %}
       </div>
     </div>
-    <p class="headline">{{ d.report.headline or '（无标题）' }}</p>
+    <p class="headline">{{ d.report.headline or t("(untitled)") }}</p>
   </header>
 
   <div class="cards{% if rv.metrics | length == 4 %} four{% endif %}">
@@ -35,7 +35,7 @@
 
   {% if rv.cards %}
   <section id="outcomes">
-    <h2>今日成果 <span class="sub">{{ rv.cards | length }} 项 · 每条都能追到原始记录</span></h2>
+    <h2>{{ t("Outcomes today") }} <span class="sub">{{ tn(rv.cards | length, "{n} item · every one traceable", "{n} items · every one traceable") }}</span></h2>
     <div class="outcome-list">
       {% for c in rv.cards %}
       <article class="outcome o-{{ c.status_cls }}">
@@ -44,12 +44,12 @@
           <div class="o-what">{{ c.what }}</div>
         </div>
         <div class="o-body">
-          {% if c.impact %}<p class="o-line"><b>意义</b>{{ c.impact }}</p>{% endif %}
-          {% if c.next %}<p class="o-line next"><b>下一步</b>{{ c.next }}</p>{% endif %}
+          {% if c.impact %}<p class="o-line"><b>{{ t("Significance") }}</b>{{ c.impact }}</p>{% endif %}
+          {% if c.next %}<p class="o-line next"><b>{{ t("Next") }}</b>{{ c.next }}</p>{% endif %}
         </div>
         {% if c.evidence or c.docs or c.shot or c.block_ids %}
         <details class="ev-box">
-          <summary>证据{% if c.evidence %} · 摘录{% endif %}{% if c.shot %} · 截图{% endif %}{% if c.docs %} · 文档 {{ c.docs | length }}{% endif %}</summary>
+          <summary>{{ t("Evidence") }}{% if c.evidence %} · {{ t("excerpt") }}{% endif %}{% if c.shot %} · {{ t("screenshot") }}{% endif %}{% if c.docs %} · {{ tn(c.docs | length, "{n} document", "{n} documents") }}{% endif %}</summary>
           {% if c.evidence %}<div class="ev-quote">{{ c.evidence }}</div>{% endif %}
           {% if c.shot %}
           <div class="ev-shot">
@@ -78,14 +78,14 @@
 
   {% if rv.todos %}
   <section id="todos">
-    <h2>待办与卡点 <span class="sub">接下来要动的 {{ rv.todos | length }} 件事</span></h2>
+    <h2>{{ t("Open items & blockers") }} <span class="sub">{{ tn(rv.todos | length, "{n} thing to move next", "{n} things to move next") }}</span></h2>
     <ul class="todo-list">
-      {% for t in rv.todos %}
+      {% for item in rv.todos %}
       <li>
-        <span class="st {{ {'waiting':'wait','blocked':'blk','todo':'todo'}.get(t.kind, 'todo') }}">{{ {'waiting':'待外部','blocked':'卡点','todo':'待办'}.get(t.kind, '待办') }}</span>
+        <span class="st {{ {'waiting':'wait','blocked':'blk','todo':'todo'}.get(item.kind, 'todo') }}">{{ {'waiting': t("Waiting on others"), 'blocked': t("Blocked"), 'todo': t("To do")}.get(item.kind, t("To do")) }}</span>
         <div class="todo-body">
-          <div class="todo-item">{{ t.item }}</div>
-          {% if t.why %}<div class="todo-why">{{ t.why }}</div>{% endif %}
+          <div class="todo-item">{{ item.item }}</div>
+          {% if item.why %}<div class="todo-why">{{ item.why }}</div>{% endif %}
         </div>
       </li>
       {% endfor %}
@@ -95,25 +95,25 @@
 
   {% if rv.tasks %}
   <section id="mainline">
-    <h2>工作主线 <span class="sub">{{ rv.task_notes.tasks }} 段 · 由 {{ rv.task_notes.segments }} 个连续工作段按主线合并</span></h2>
+    <h2>{{ t("Main threads") }} <span class="sub">{{ t("{n} threads", n=rv.task_notes.tasks) }} · {{ tn(rv.task_notes.segments, "merged from {n} work segment", "merged from {n} work segments") }}</span></h2>
     <div class="daystrip tall">
       {% for s in rv.task_segs %}
       <span class="seg" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></span>
       {% endfor %}
     </div>
-    <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
+    <div class="ticks">{% for tick in ticks %}<span>{{ tick }}</span>{% endfor %}</div>
     <table class="lanes">
-      <thead><tr><th style="width:118px">时间</th><th>在做什么</th><th style="width:38%">这段的结果</th></tr></thead>
+      <thead><tr><th style="width:118px">{{ t("Time") }}</th><th>{{ t("What was happening") }}</th><th style="width:38%">{{ t("Outcome") }}</th></tr></thead>
       <tbody>
-        {% for t in rv.tasks %}
+        {% for task in rv.tasks %}
         <tr>
-          <td class="mono">{{ t.start }}–{{ t.end }}<div class="lane-dur">{{ t.minutes }} 分</div></td>
+          <td class="mono">{{ task.start }}–{{ task.end }}<div class="lane-dur">{{ t("{n} min", n=task.minutes) }}</div></td>
           <td>
-            <div class="lane-label"><span class="vdot" style="background:{{ (verbs.get(t.verb) or {}).get('color', '#94a3b8') }}"></span>{{ t.label }}</div>
-            {% if t.detail %}<div class="lane-detail">{{ t.detail }}</div>{% endif %}
+            <div class="lane-label"><span class="vdot" style="background:{{ (verbs.get(task.verb) or {}).get('color', '#94a3b8') }}"></span>{{ task.label }}</div>
+            {% if task.detail %}<div class="lane-detail">{{ task.detail }}</div>{% endif %}
           </td>
           <td>
-            {% if t.outcome %}<span class="lane-out">{{ t.outcome }}</span>
+            {% if task.outcome %}<span class="lane-out">{{ task.outcome }}</span>
             {% else %}<span class="empty">—</span>{% endif %}
           </td>
         </tr>
@@ -122,8 +122,8 @@
     </table>
     {% if rv.task_notes.merged or rv.task_notes.away %}
     <p class="empty lane-note">
-      {% if rv.task_notes.merged %}已把 {{ rv.task_notes.merged }} 个短切换并入所属主线，逐段明细见附录。{% endif %}
-      {% if rv.task_notes.away %}另有 {{ rv.task_notes.away }} 段锁屏/离开未计入主线。{% endif %}
+      {% if rv.task_notes.merged %}{{ tn(rv.task_notes.merged, "{n} short switch was folded into its thread; the appendix lists every segment.", "{n} short switches were folded into their threads; the appendix lists every segment.") }}{% endif %}
+      {% if rv.task_notes.away %}{{ tn(rv.task_notes.away, "{n} locked or away segment is not counted in the threads.", "{n} locked or away segments are not counted in the threads.") }}{% endif %}
     </p>
     {% endif %}
   </section>
@@ -131,7 +131,7 @@
 
   {% if d.report.offline %}
   <section>
-    <h2>人工补录 <span class="sub">屏幕看不到的工作：会议、外出、思考。由本人登记，不计入屏幕活动统计</span></h2>
+    <h2>{{ t("Manual entries") }} <span class="sub">{{ t("Work the screen cannot see: meetings, time away, thinking. Entered by you, not counted as screen activity.") }}</span></h2>
     <ul class="tl">
       {% for o in d.report.offline %}
       <li>
@@ -139,7 +139,7 @@
         <div class="body">
           <div class="title">{{ o.label }}</div>
           {% if o.note %}<div class="impact">{{ o.note }}</div>{% endif %}
-          <div class="chips"><span class="chip">人工登记</span></div>
+          <div class="chips"><span class="chip">{{ t("Manual entry") }}</span></div>
         </div>
       </li>
       {% endfor %}
@@ -148,27 +148,27 @@
   {% endif %}
 
   <section id="time">
-    <h2>时间分配 <span class="sub">这部分说明时间花在哪，不是成果本身</span></h2>
+    <h2>{{ t("Time split") }} <span class="sub">{{ t("Where the time went, not what it produced") }}</span></h2>
     <div class="legend">
       {% for key, label in cat_label.items() %}
       {% if key in d.stats.by_category %}
-      <span><i style="background:{{ {'dev':'#2563eb','doc':'#0d9488','meet':'#d97706','comm':'#7c3aed','web':'#64748b','other':'#94a3b8'}[key] }}"></i>{{ label }} {{ d.stats.by_category[key] }} 分</span>
+      <span><i style="background:{{ {'dev':'#2563eb','doc':'#0d9488','meet':'#d97706','comm':'#7c3aed','web':'#64748b','other':'#94a3b8'}[key] }}"></i>{{ label }} {{ t("{n} min", n=d.stats.by_category[key]) }}</span>
       {% endif %}
       {% endfor %}
-      <span>有效活动 {{ (d.stats.active_minutes / 60) | round(1) }} 小时{% if d.stats.idle_minutes %}（另有 {{ d.stats.idle_minutes }} 分暂停/锁屏，未计入）{% endif %}</span>
+      <span>{{ t("Active {h} h", h=(d.stats.active_minutes / 60) | round(1)) }}{% if d.stats.idle_minutes %}{{ t(" (plus {n} min paused or locked, not counted)", n=d.stats.idle_minutes) }}{% endif %}</span>
     </div>
     {% if rhythm.longest_focus_min %}
     <div class="rhythm">
-      <span>最长专注 <b>{{ rhythm.longest_focus_min }} 分</b>（{{ rhythm.longest_focus_at }}）</span>
-      <span>被打断 <b>{{ rhythm.interruptions }}</b> 次</span>
-      <span>碎片段 <b>{{ rhythm.fragmented_min }} 分</b>（{{ (rhythm.fragmented_ratio * 100) | round(0) | int }}%）</span>
-      <span>整段工作 <b>{{ rhythm.deep_work_min }} 分</b></span>
-      <span>活动最密 <b>{{ rhythm.peak_window }}</b></span>
+      <span>{{ t("Longest focus") }} <b>{{ t("{n} min", n=rhythm.longest_focus_min) }}</b> {{ t("({at})", at=rhythm.longest_focus_at) }}</span>
+      <span>{{ t("Interruptions") }} <b>{{ rhythm.interruptions }}</b></span>
+      <span>{{ t("Fragmented time") }} <b>{{ t("{n} min", n=rhythm.fragmented_min) }}</b> {{ t("({pct}%)", pct=(rhythm.fragmented_ratio * 100) | round(0) | int) }}</span>
+      <span>{{ t("Deep work") }} <b>{{ t("{n} min", n=rhythm.deep_work_min) }}</b></span>
+      <span>{{ t("Busiest window") }} <b>{{ rhythm.peak_window }}</b></span>
     </div>
     {% endif %}
     {% if rv.gaps.inside %}
     <div class="callout info gap-line">
-      记录中断（{{ rv.gaps.first }}–{{ rv.gaps.last }} 之间）：{% for g in rv.gaps.inside %}<b>{{ g.start }}–{{ g.end }}</b>（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}。多半是离开、会议或休息，这些时间不算进上面的时长。
+      {{ t("Recording gaps between {from} and {to}:", from=rv.gaps.first, to=rv.gaps.last) }}{% for g in rv.gaps.inside %}<b>{{ g.start }}–{{ g.end }}</b> ({{ t("{n} min", n=g.minutes) }}){% if not loop.last %}{{ t(", ") }}{% endif %}{% endfor %}{{ t(". Mostly time away, a meeting or a break; not counted in the durations above.") }}
     </div>
     {% endif %}
   </section>
@@ -176,13 +176,13 @@
   {% set ins = d.report.insight %}
   {% if ins %}
   <section>
-    <h2>另外两点观察 <span class="sub">对工作方式的判断，不是复述</span></h2>
+    <h2>{{ t("Two more observations") }} <span class="sub">{{ t("A judgement about how the work went, not a recap") }}</span></h2>
     <div class="grid2">
       {% for it in ins %}
       <div class="item">
         <div class="what">{{ it.observation }}</div>
-        {% if it.evidence %}<div class="impact"><b>依据</b>　{{ it.evidence }}</div>{% endif %}
-        {% if it.action %}<div class="impact"><b>下次</b>　{{ it.action }}</div>{% endif %}
+        {% if it.evidence %}<div class="impact"><b>{{ t("Basis") }}</b>　{{ it.evidence }}</div>{% endif %}
+        {% if it.action %}<div class="impact"><b>{{ t("Next time") }}</b>　{{ it.action }}</div>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -192,16 +192,16 @@
   {% set fr = d.report.friction %}
   {% if fr %}
   <section>
-    <h2>卡点与代价 <span class="sub">花了多少时间、绕了多少路，也记下来</span></h2>
+    <h2>{{ t("Blockers & cost") }} <span class="sub">{{ t("What it cost in time and detours, also recorded") }}</span></h2>
     <ul class="tl">
       {% for it in fr %}
       <li>
-        <div class="t">卡点 {{ loop.index }}</div>
+        <div class="t">{{ t("Blocker {n}", n=loop.index) }}</div>
         <div class="body">
           <div class="title">{{ it.what }}</div>
-          {% if it.cause %}<div class="impact"><b>原因</b>　{{ it.cause }}</div>{% endif %}
-          {% if it.cost %}<div class="impact"><b>代价</b>　{{ it.cost }}</div>{% endif %}
-          {% if it.fix %}<div class="impact"><b>处理</b>　{{ it.fix }}</div>{% endif %}
+          {% if it.cause %}<div class="impact"><b>{{ t("Cause") }}</b>　{{ it.cause }}</div>{% endif %}
+          {% if it.cost %}<div class="impact"><b>{{ t("Cost") }}</b>　{{ it.cost }}</div>{% endif %}
+          {% if it.fix %}<div class="impact"><b>{{ t("Handling") }}</b>　{{ it.fix }}</div>{% endif %}
           <div class="chips">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
       </li>
@@ -212,16 +212,16 @@
 
   {% if d.report.decisions or d.report.learnings or d.report.in_progress or d.report.blockers %}
   <section>
-    <h2>补充记录</h2>
+    <h2>{{ t("Additional notes") }}</h2>
     <div class="grid2">
       {% if d.report.in_progress %}
       <div>
-        <h3>进行中</h3>
+        <h3>{{ t("In progress") }}</h3>
         {% for it in d.report.in_progress %}
         <div class="item" style="margin-bottom:10px">
           <div class="what">{{ it.what }}</div>
           {% if it.state %}<div class="impact">{{ it.state }}</div>{% endif %}
-          {% if it.next %}<div class="impact"><b>下一步：</b>{{ it.next }}</div>{% endif %}
+          {% if it.next %}<div class="impact"><b>{{ t("Next:") }}</b>{{ it.next }}</div>{% endif %}
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
         </div>
         {% endfor %}
@@ -229,7 +229,7 @@
       {% endif %}
       {% if d.report.blockers %}
       <div>
-        <h3>其他卡点</h3>
+        <h3>{{ t("Other blockers") }}</h3>
         {% for it in d.report.blockers %}
         <div class="item" style="margin-bottom:10px">
           <div class="what">{{ it.what }}</div>
@@ -241,7 +241,7 @@
       {% endif %}
       {% if d.report.decisions %}
       <div>
-        <h3>决策</h3>
+        <h3>{{ t("Decisions") }}</h3>
         {% for it in d.report.decisions %}
         <div class="item" style="margin-bottom:10px"><div class="what">{{ it.what }}</div>
           {% if it.why %}<div class="impact">{{ it.why }}</div>{% endif %}
@@ -252,7 +252,7 @@
       {% endif %}
       {% if d.report.learnings %}
       <div>
-        <h3>收获</h3>
+        <h3>{{ t("Learnings") }}</h3>
         {% for it in d.report.learnings %}
         <div class="item" style="margin-bottom:10px"><div class="what">{{ it.what }}</div>
           <div class="foot">{% for bid in it.block_ids %}<a class="ev" href="#{{ bid }}">{{ bid }}</a>{% endfor %}</div>
@@ -266,7 +266,7 @@
 
   {% if rv.tomorrow_extra %}
   <section>
-    <h2>明天 <span class="sub">今天的遗留怎么接着做</span></h2>
+    <h2>{{ t("Tomorrow") }} <span class="sub">{{ t("How today's leftovers continue") }}</span></h2>
     <ul class="tl">
       {% for it in rv.tomorrow_extra %}
       <li style="grid-template-columns:26px 1fr">
@@ -282,12 +282,12 @@
   {% if tb %}
   {% set maxmin = (tb | map(attribute='minutes') | max) or 1 %}
   <section>
-    <h2>时间分布 <span class="sub">模型估计，仅供参照</span></h2>
+    <h2>{{ t("Estimated time split") }} <span class="sub">{{ t("Model estimate, reference only") }}</span></h2>
     <div class="bars">
       {% for it in tb %}
       <div class="bar"><span>{{ it.category }}</span>
         <span class="track"><span class="fill" style="width:{{ (it.minutes / maxmin * 100) | round(1) }}%"></span></span>
-        <span class="v">{{ it.minutes }} 分</span></div>
+        <span class="v">{{ t("{n} min", n=it.minutes) }}</span></div>
       {% endfor %}
     </div>
   </section>
@@ -296,14 +296,14 @@
   <!-- ============================ 证据与附录：默认折叠 ============================ -->
 
   <section id="appendix">
-    <h2>证据与附录 <span class="sub">要核对结论时再展开；日常阅读不需要翻到这里</span></h2>
+    <h2>{{ t("Evidence & appendix") }} <span class="sub">{{ t("Open these only to check a conclusion; day-to-day reading stops above") }}</span></h2>
 
     <details class="appx" id="appendix-blocks">
-      <summary>活动块明细 · {{ blocks | length }} 块（按应用切分，含截图与文字摘录）</summary>
+      <summary>{{ t("Activity blocks · {count} (split by app, with screenshots and text excerpts)", count=tn(blocks | length, "{n} block", "{n} blocks")) }}</summary>
       <div class="appx-body">
-        <input class="search" id="tl-search" placeholder="过滤…（输入文件名、应用名、标题）">
+        <input class="search" id="tl-search" placeholder="{{ t('Filter… (file, app or window title)') }}">
         <table>
-          <thead><tr><th style="width:92px">时间</th><th style="width:52px">分钟</th><th style="width:110px">应用</th><th>标题 / 文字摘录</th><th style="width:120px">截图</th></tr></thead>
+          <thead><tr><th style="width:92px">{{ t("Time") }}</th><th style="width:52px">{{ t("Min") }}</th><th style="width:110px">{{ t("App") }}</th><th>{{ t("Title / text excerpt") }}</th><th style="width:120px">{{ t("Screenshot") }}</th></tr></thead>
           <tbody id="tl-list">
           {% for b in blocks %}
             <tr id="{{ b.id }}" data-text="{{ (b.title ~ ' ' ~ b.app) | lower }}">
@@ -311,9 +311,9 @@
               <td class="mono">{{ b.minutes }}</td>
               <td>{{ b.app or '-' }}<div class="tiny">{{ b._cat_label }}</div></td>
               <td>
-                <div>{{ b.title or '(无标题)' }}</div>
+                <div>{{ b.title or t("(untitled)") }}</div>
                 {% if b.text %}
-                <details><summary>展开文字摘录（{{ b.text | length }} 字）</summary><pre>{{ b.text }}</pre></details>
+                <details><summary>{{ t("Show text excerpt ({n} chars)", n=b.text | length) }}</summary><pre>{{ b.text }}</pre></details>
                 {% endif %}
               </td>
               <td>{% if b._thumb %}<img class="thumb" src="{{ b._thumb }}" data-img="{{ b._full }}" loading="lazy" alt="">{% else %}<span class="empty">—</span>{% endif %}</td>
@@ -321,32 +321,32 @@
           {% endfor %}
           </tbody>
         </table>
-        {% if not blocks %}<p class="empty">没有活动块记录。</p>{% endif %}
+        {% if not blocks %}<p class="empty">{{ t("No activity blocks recorded.") }}</p>{% endif %}
       </div>
     </details>
 
     {% if segs or bsegs %}
     <details class="appx">
-      <summary>原始色带 · 每个活动块单独上色（{{ blocks | length }} 块 / {{ behaviors | length }} 个连续工作段）</summary>
+      <summary>{{ t("Raw strip · every block colored separately ({blocks} / {segments})", blocks=tn(blocks | length, "{n} block", "{n} blocks"), segments=tn(behaviors | length, "{n} work segment", "{n} work segments")) }}</summary>
       <div class="appx-body">
         <div class="daystrip tall">
           {% for s in segs %}
           <a class="seg" href="#{{ s.id }}" style="left:{{ s.left }}%;width:{{ s.width }}%;background:{{ s.color }}" title="{{ s.title }}"></a>
           {% endfor %}
         </div>
-        <div class="ticks">{% for t in ticks %}<span>{{ t }}</span>{% endfor %}</div>
+        <div class="ticks">{% for tick in ticks %}<span>{{ tick }}</span>{% endfor %}</div>
         {% if behaviors %}
-        <div class="legend" style="margin-top:12px"><span>行为段被 <b>{{ d.report.behaviors | length }}</b> 个连续工作段切分，逐段说明：</span></div>
+        <div class="legend" style="margin-top:12px"><span>{{ t("Split into {n} work segments, each described below:", n=d.report.behaviors | length) }}</span></div>
         <ul class="tl" style="margin-top:6px">
           {% for it in behaviors %}
           <li>
-            <div class="t">{{ it.start }}–{{ it.end }}<div class="dur">{{ it.minutes }} 分</div></div>
+            <div class="t">{{ it.start }}–{{ it.end }}<div class="dur">{{ t("{n} min", n=it.minutes) }}</div></div>
             <div class="body">
               <div class="title"><span class="vdot" style="background:{{ (verbs.get(it.verb) or {}).get('color', '#94a3b8') }}"></span>{{ it.label }}{% if it.confidence == 'low' %}<span class="q">?</span>{% endif %}</div>
               {% if it.detail %}<div class="impact">{{ it.detail }}</div>{% endif %}
               <div class="chips">
                 <span class="chip">{{ (verbs.get(it.verb) or {}).get('label', it.verb) }}</span>
-                {% if it.switches %}<span class="chip">切换 {{ it.switches }} 次</span>{% endif %}
+                {% if it.switches %}<span class="chip">{{ tn(it.switches, "Switched {n} time", "Switched {n} times") }}</span>{% endif %}
               </div>
             </div>
           </li>
@@ -359,7 +359,7 @@
 
     {% if refs_list %}
     <details class="appx">
-      <summary>相关文档 · {{ refs_list | length }} 条（正文只挂了能支撑结论的那些）</summary>
+      <summary>{{ t("Related documents · {n} (only those that back a conclusion appear in the body)", n=refs_list | length) }}</summary>
       <div class="appx-body">
         <div class="chips">
           {% for r in refs_list %}
@@ -370,14 +370,14 @@
             {% endif %}
           {% endfor %}
         </div>
-        <p class="empty" style="margin-top:10px">灰色为已识别但暂不可跳转（如知识库目标尚未接入）。本期只做跳转，不改动任何外部文档。</p>
+        <p class="empty" style="margin-top:10px">{{ t("Grey chips are recognized but not clickable yet (the knowledge base target is not wired up). This build only links; it never modifies an external document.") }}</p>
       </div>
     </details>
     {% endif %}
 
     {% if d.report.opening_md or d.report.summary_md %}
     <details class="appx">
-      <summary>叙述全文 · {{ '开篇与过程' if d.report.opening_md else '过程' }}（原样保留，供需要时通读）</summary>
+      <summary>{{ t("Full narrative · {part} (kept verbatim, for a full read when needed)", part=(t("Opening and process") if d.report.opening_md else t("Process"))) }}</summary>
       <div class="appx-body prose">
         {% if d.report.opening_md %}
         {% for para in d.report.opening_md.split('\n\n') if para.strip() %}<p>{{ para | replace('\n', ' ') }}</p>{% endfor %}
@@ -385,36 +385,36 @@
         {% if d.report.summary_md %}
         {% for para in d.report.summary_md.split('\n\n') if para.strip() %}<p>{{ para | replace('\n', ' ') }}</p>{% endfor %}
         {% else %}
-        <p class="empty">{{ d.report.notes_for_human or '这一天没有生成叙述性总结。' }}</p>
+        <p class="empty">{{ d.report.notes_for_human or t("No narrative summary was generated for this day.") }}</p>
         {% endif %}
       </div>
     </details>
     {% endif %}
 
     <details class="appx">
-      <summary>数据缺口与生成信息</summary>
+      <summary>{{ t("Data gaps & generation details") }}</summary>
       <div class="appx-body">
         {% if d.gaps %}
         <div class="callout">
-          全窗口（{{ d.coverage.window }}）内没有任何采集记录的时段，含夜间与正常休息，这里只是完整列出：
-          {% for g in d.gaps %}<b>{{ g.start }}–{{ g.end }}</b>（{{ g.minutes }} 分）{% if not loop.last %}、{% endif %}{% endfor %}
+          {{ t("Spans with no capture inside the whole window ({window}), night and normal breaks included; listed here for completeness:", window=d.coverage.window) }}
+          {% for g in d.gaps %}<b>{{ g.start }}–{{ g.end }}</b> ({{ t("{n} min", n=g.minutes) }}){% if not loop.last %}{{ t(", ") }}{% endif %}{% endfor %}
         </div>
         {% endif %}
         <table style="margin-top:12px">
           <tbody>
-            <tr><th style="width:140px">窗口</th><td class="mono">{{ d.coverage.window or ('04:00 – 次日 04:00') }}{% if d.coverage.until %} · 截至 {{ d.coverage.until }}{% endif %}</td></tr>
-            <tr><th>首末记录</th><td class="mono">{{ d.stats.first or '—' }} → {{ d.stats.last or '—' }}</td></tr>
-            <tr><th>采集规模</th><td>{{ d.stats.block_count }} 个活动块 · {{ d.stats.shot_count }} 张截图 · {{ d.stats.ocr_blocks }} 块有文字识别 · {{ d.refs | length }} 条文档引用 · {{ rhythm.session_count or 0 }} 个连续工作段</td></tr>
-            <tr><th>生成时间</th><td class="mono">{{ d.generated_at }}</td></tr>
-            <tr><th>触发原因</th><td>{{ {'auto':'每日 21:00 自动','manual':'手动','catchup':'开机补跑','finalize':'次日终版'}.get(d.reason, d.reason) }}</td></tr>
-            <tr><th>模型</th><td class="mono">{{ d.meta.model or '未调用' }}（调用 {{ d.meta.calls }} 次，输入 {{ d.meta.prompt_tokens }} / 输出 {{ d.meta.completion_tokens }} tokens）</td></tr>
-            <tr><th>输入规模</th><td>{{ d.meta.payload_chars }} 字（预算 {{ d.meta.payload_budget }}），详写 {{ d.meta.blocks_detailed }} / {{ d.meta.blocks_total }} 块</td></tr>
-            <tr><th>耗时</th><td>{{ d.meta.elapsed_ms }} ms</td></tr>
+            <tr><th style="width:140px">{{ t("Window") }}</th><td class="mono">{{ d.coverage.window or t("04:00 – 04:00 next day") }}{% if d.coverage.until %} · {{ t("until {time}", time=d.coverage.until) }}{% endif %}</td></tr>
+            <tr><th>{{ t("First & last record") }}</th><td class="mono">{{ d.stats.first or '—' }} → {{ d.stats.last or '—' }}</td></tr>
+            <tr><th>{{ t("Capture volume") }}</th><td>{{ tn(d.stats.block_count, "{n} activity block", "{n} activity blocks") }} · {{ tn(d.stats.shot_count, "{n} screenshot", "{n} screenshots") }} · {{ tn(d.stats.ocr_blocks, "{n} block with OCR text", "{n} blocks with OCR text") }} · {{ tn(d.refs | length, "{n} document reference", "{n} document references") }} · {{ tn(rhythm.session_count or 0, "{n} work segment", "{n} work segments") }}</td></tr>
+            <tr><th>{{ t("Generated at") }}</th><td class="mono">{{ d.generated_at }}</td></tr>
+            <tr><th>{{ t("Trigger") }}</th><td>{{ {'auto': t("Daily at 21:00"), 'manual': t("Manual"), 'catchup': t("Catch-up on boot"), 'finalize': t("Final, next day")}.get(d.reason, d.reason) }}</td></tr>
+            <tr><th>{{ t("Model") }}</th><td class="mono">{{ d.meta.model or t("not called") }} {{ t("({calls} calls, {prompt} in / {completion} out tokens)", calls=d.meta.calls, prompt=d.meta.prompt_tokens, completion=d.meta.completion_tokens) }}</td></tr>
+            <tr><th>{{ t("Input size") }}</th><td>{{ t("{chars} chars (budget {budget}), {detailed} of {total} blocks detailed in full", chars=d.meta.payload_chars, budget=d.meta.payload_budget, detailed=d.meta.blocks_detailed, total=d.meta.blocks_total) }}</td></tr>
+            <tr><th>{{ t("Elapsed") }}</th><td>{{ d.meta.elapsed_ms }} ms</td></tr>
             {% if d.report.notes_for_human %}
-            <tr><th>不确定的地方</th><td>{{ d.report.notes_for_human }}</td></tr>
+            <tr><th>{{ t("Uncertainties") }}</th><td>{{ d.report.notes_for_human }}</td></tr>
             {% endif %}
             {% if d.meta.issues %}
-            <tr><th>校验提示</th><td>{% for i in d.meta.issues %}<div>· {{ i }}</div>{% endfor %}</td></tr>
+            <tr><th>{{ t("Validation notes") }}</th><td>{% for i in d.meta.issues %}<div>· {{ i }}</div>{% endfor %}</td></tr>
             {% endif %}
           </tbody>
         </table>
@@ -422,7 +422,7 @@
     </details>
   </section>
 
-  <footer>What-I-Did · 截图与 OCR 全部在本机完成，仅文本摘要发送给模型</footer>
+  <footer>What-I-Did · {{ t("Screenshots and OCR run on this machine; only text summaries go to the model") }}</footer>
 </div>
 
 <div id="lightbox"><img id="lightbox-img" alt=""></div>

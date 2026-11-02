@@ -1,6 +1,8 @@
 """时间工具：全项目统一 +08:00，统一"工作日"口径。"""
 from __future__ import annotations
 
+from i18n import t
+
 from datetime import datetime, timedelta, timezone
 
 TZ = timezone(timedelta(hours=8))
@@ -66,14 +68,14 @@ def fmt_hm(dt: datetime) -> str:
 def human_dur(sec: float) -> str:
     sec = int(max(0, sec))
     if sec < 60:
-        return f"{sec} 秒"
+        return f"{sec}{t(' s')}"
     total_min = sec // 60
     h, m = divmod(total_min, 60)
     if h and m:
-        return f"{h} 小时 {m} 分"
+        return f"{h}{t(' h')} {m}{t(' min')}"
     if h:
-        return f"{h} 小时"
-    return f"{m} 分钟"
+        return f"{h}{t(' h')}"
+    return f"{m}{t(' min')}"
 
 
 def hm_to_minutes(hm: str) -> int:

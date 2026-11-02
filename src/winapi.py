@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import ctypes
 import os
 from ctypes import wintypes
@@ -61,7 +63,8 @@ try:
 except OSError:                                   # Win7 没有 shcore
     shcore = None
 
-DPI_NAMES = {0: "未感知", 1: "系统级", 2: "逐显示器"}
+#: DPI 感知级别的英文原文；显示时再走 t()，模块级不能提前取词。
+DPI_NAMES = {0: "Unaware", 1: "System", 2: "Per-monitor"}
 
 
 class RECT(ctypes.Structure):
@@ -92,8 +95,10 @@ def dpi_awareness() -> tuple[int, str]:
         value = int(user32.GetAwarenessFromDpiAwarenessContext(
             user32.GetThreadDpiAwarenessContext()))
     except Exception:                             # Win10 1607 之前没有这组 API
-        return -1, "无法判断"
-    return value, DPI_NAMES.get(value, f"未知({value})")
+        return -1, t("Cannot determine")
+    if value not in DPI_NAMES:
+        return value, t("Unknown ({value})", value=value)
+    return value, t(DPI_NAMES[value])
 
 
 def set_dpi_aware() -> str:

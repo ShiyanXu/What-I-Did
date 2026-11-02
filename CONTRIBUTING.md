@@ -1,31 +1,33 @@
-# 参与开发
+# Contributing
 
-## 环境
+> [简体中文](CONTRIBUTING.zh-CN.md) · **English**
 
-Windows 10/11 x64 + Python 3.10+：
+## Environment
+
+Windows 10/11 x64 + Python 3.10+:
 
 ```bat
 python -m pip install Pillow numpy requests Jinja2 PyYAML psutil
-python -m pip install rapidocr onnxruntime      :: 需要内置 OCR 时
+python -m pip install rapidocr onnxruntime      :: only if you need the built-in OCR
 ```
 
-**开发时始终用独立数据目录**，否则样本会写进你的真实记录：
+**Always use a separate data directory while developing**, otherwise samples end up in your real records:
 
 ```bat
 set WID_HOME=%CD%\.tmp_wid_dev
 ```
 
-## 代码约定
+## Code conventions
 
-- **不引入新依赖**。运行时的依赖清单是固定的：标准库 + `Pillow numpy requests Jinja2 PyYAML psutil`。托盘、去重、调度这些都用标准库或 ctypes 自己实现，新增依赖需要充分理由。
-- **路径只从 `src/paths.py` 取**，不要在别处拼路径。
-- **判断只有一个来源**。"该不该出报"是 `tick.pending()`；采集启停看 `control.py`；状态快照看 `status.py`；自检看 `doctor.py`。界面和命令行都调这些，不要另写一份。
-- **模型只产 JSON，排版在本地**。新增版面改 `src/templates/`，不要指望模型输出格式。
-- **结构变化只加字段**，`schema_version` 保持 1；旧数据缺字段按空处理。
-- **新增配置项要同时改两处**：`config.default.yaml`（给人看）和 `src/config.py` 的 `DEFAULTS`（参与类型校验与默认合并）。只改前者，`"false"` 这样的字符串会被当成真值。
-- **新增 `src/*.py` 要同步 `build.spec` 的 `MODULES`**。那份清单是手写的，静态分析看不到按需导入，漏写会让打包版 `ImportError`，而源码模式完全正常。
+- **No new dependencies.** The runtime dependency list is fixed: the standard library + `Pillow numpy requests Jinja2 PyYAML psutil`. The tray, dedupe and scheduling are all hand-built on the standard library or ctypes; a new dependency needs a strong justification.
+- **Get paths from `src/paths.py` only**; do not join paths anywhere else.
+- **One source per decision.** "Should a report run" is `tick.pending()`; start and stop of capture is `control.py`; the status snapshot is `status.py`; the self-check is `doctor.py`. The UI and the CLI both call these; do not write a second copy.
+- **The model produces JSON only, layout stays local.** New layout goes in `src/templates/`; do not expect the model to output formatting.
+- **Structural changes add fields only**, and `schema_version` stays at 1; missing fields in old data are treated as empty.
+- **A new config key changes two places at once**: `config.default.yaml` (for humans) and `DEFAULTS` in `src/config.py` (which takes part in type validation and default merging). Change only the former and a string like `"false"` is treated as true.
+- **A new `src/*.py` must be added to `MODULES` in `build.spec`.** That list is hand-written, static analysis cannot see lazy imports, and a missing entry gives you an `ImportError` in the packaged build while source mode works perfectly.
 
-## 提交前自测
+## Self-test before committing
 
 ```bat
 python -m py_compile wid.py src\*.py src\refs\*.py scripts\*.py
@@ -37,7 +39,7 @@ python scripts\check_privacy.py
 python scripts\verify_dpi.py
 ```
 
-改到界面还要跑点击级回归：
+Changes to the UI also need the click-level regression:
 
 ```bat
 python scripts\seed_gui_home.py .tmp_wid_gui
@@ -45,16 +47,16 @@ set WID_HOME=%CD%\.tmp_wid_gui
 python scripts\gui_regression.py
 ```
 
-这些脚本都不联网、不需要模型 Key、不碰真实记录。细节见[构建与测试](docs/building.md)。
+None of these scripts touch the network, need a model key, or go near your real records. Details are in [building and testing](docs/building.md).
 
-## 提交信息
+## Commit messages
 
-一个提交做一件事，说明"为什么"而不只是"改了什么"。涉及行为变化时，在提交正文里写清对旧数据与旧配置的影响。
+One commit does one thing, and the message explains **why**, not just what changed. When behaviour changes, spell out in the body what it means for existing data and existing configuration.
 
-## 文档
+## Documentation
 
-用户可见的行为变化要同步文档：功能改 `docs/usage.md`，配置项改 `docs/configuration.md`，隐私边界改 `docs/privacy.md`，架构或数据模型改 `docs/architecture.md`。
+User-visible behaviour changes come with documentation: features go in `docs/usage.md`, config keys in `docs/configuration.md`, privacy boundaries in `docs/privacy.md`, architecture or data model changes in `docs/architecture.md`.
 
-## 隐私红线
+## Privacy red lines
 
-任何让图片离开本机的改动都不会被接受。任何绕过"暂停 / 锁屏 / 名单 / 无效配置"的采集路径同样不会——`scripts/check_privacy.py` 会拦住这类改动。
+No change that lets images leave the machine will be accepted. Neither will any capture path that bypasses "pause / lock screen / blocklists / invalid config" — `scripts/check_privacy.py` blocks that class of change.

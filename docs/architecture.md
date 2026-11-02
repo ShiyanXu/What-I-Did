@@ -1,132 +1,134 @@
-# 架构
+# Architecture
 
-本文说明 What-IDid 的整体结构、数据如何在各模块间流动，以及几个不容易改的设计取舍。只想用起来读 [README](../README.zh-CN.md) 和[使用指南](usage.md) 即可。
+> [简体中文](architecture.zh-CN.md) · **English**
 
-## 设计原则
+This page explains how What-IDid is put together, how data moves between modules, and the handful of design decisions that are hard to change later. If you only want to use it, the [README](../README.md) and the [usage guide](usage.md) are enough.
 
-| 原则 | 具体做法 | 代价 |
+## Design principles
+
+| Principle | How it is done | What it costs |
 | --- | --- | --- |
-| 图片不出本机 | 截图、OCR 全部本地完成，只有脱敏后的文本进入模型请求 | OCR 质量受本机引擎限制；换机器要重装模型 |
-| 模型只产内容，不产格式 | 模型返回固定 schema 的 JSON，排版由本地 Jinja2 模板决定 | 模板改动不受模型能力影响，但也要自己维护 |
-| 时间由本地决定 | 活动块、行为段的起止与切分全部本地计算，模型只能贴标签 | 模型无法"修正"它认为错误的时间 |
-| 单一判断来源 | "该不该出报"只有 `tick.pending()` 一处实现，界面、计划任务、诊断都调它 | 加新触发方式时必须复用它，不能另写一份 |
-| 只增不减的兼容策略 | 报告 `schema_version` 保持 1，只加字段；旧日报缺字段按空处理 | 老数据不会自动重算，口径修正不影响历史 |
-| 不引额外依赖 | 运行时只需标准库 + Pillow/numpy/requests/Jinja2/PyYAML/psutil；托盘用 ctypes 手写 | 一些功能要自己实现（托盘、去重、调度） |
+| Images never leave the machine | Screenshots and OCR run entirely locally; only redacted text enters a model request | OCR quality is bounded by the local engine; a new machine means reinstalling the model |
+| The model produces content, not layout | The model returns fixed-schema JSON; layout is decided by local Jinja2 templates | Template changes are independent of model capability, but you maintain them yourself |
+| Time is decided locally | Activity block and behavior segment boundaries are all computed locally; the model can only attach labels | The model cannot "correct" a time it thinks is wrong |
+| One source of truth | "Should a report run" is implemented once, in `tick.pending()`; the UI, the scheduled task and diagnostics all call it | Any new trigger must reuse it, never reimplement it |
+| Additive compatibility | The report `schema_version` stays at 1 and fields are only added; missing fields in old reports are treated as empty | Old data is never recomputed automatically, so a corrected definition does not rewrite history |
+| No extra dependencies | The runtime needs only the standard library + Pillow/numpy/requests/Jinja2/PyYAML/psutil; the tray is hand-written with ctypes | Some features have to be built by hand (tray, dedupe, scheduling) |
 
-## 运行形态
+## Runtime shape
 
-整个程序是一个 exe，靠命令行参数分成三种角色：
+The whole program is one exe; command-line arguments split it into three roles:
 
-| 角色 | 启动方式 | 特点 |
+| Role | How it starts | Characteristics |
 | --- | --- | --- |
-| 图形界面 | 双击，或 `What-IDid.exe gui` | 无控制台窗口；关窗口只收进托盘 |
-| 命令行 | `What-IDid.exe <子命令>` | 以无控制台方式链接，运行时 `AttachConsole` 接回调用方控制台 |
-| 常驻采集 | 程序自己拉起 `What-IDid.exe daemon` | 无窗口，单实例，带看门狗 |
+| GUI | Double-click, or `What-IDid.exe gui` | No console window; closing the window only hides it to the tray |
+| CLI | `What-IDid.exe <subcommand>` | Linked without a console; at runtime `AttachConsole` reattaches to the caller's console |
+| Resident capture | The program starts `What-IDid.exe daemon` itself | No window, single instance, with a watchdog |
 
-几个约束：
+A few constraints:
 
-- **单实例**：采集进程用命名互斥量保证只有一个；崩溃时由系统释放，不会留下"僵尸锁"。界面进程不占这个锁，可以重复打开，重复双击会把已收进托盘的窗口叫回来。
-- **界面不负责采集**：界面只读写状态、发起命令；进程被关掉不影响记录。要停采集必须显式 `stop` 或用托盘菜单的退出。
-- **托盘独立线程**：托盘窗口建在自己的线程里跑消息循环。放在 Tk 主线程里会因为 tkinter 在事件循环中释放 GIL 而崩在 `PyEval_RestoreThread`，这是踩过的坑。
+- **Single instance**: the capture process uses a named mutex to guarantee there is only one; on a crash the OS releases it, so there is no "zombie lock". The UI process does not hold this lock, so it can be opened repeatedly — double-clicking again brings back the window already in the tray.
+- **The UI does not capture**: it only reads and writes state and issues commands; killing the process does not stop recording. To stop capture you must explicitly `stop` or use quit in the tray menu.
+- **The tray gets its own thread**: the tray window runs its message loop in a thread of its own. Putting it on the Tk main thread crashes in `PyEval_RestoreThread`, because tkinter releases the GIL inside the event loop. That one has been hit for real.
 
-系统里最多注册两个计划任务：
+At most two scheduled tasks are registered:
 
-| 任务 | 触发 | 作用 |
+| Task | Trigger | Purpose |
 | --- | --- | --- |
-| `WhatIDid-Recorder` | 登录时 | 常驻采集；无执行时限，被杀后每分钟重启 |
-| `WhatIDid-Report` | 每天 21:00 起每 20 分钟，共 2 小时；登录后 3 分钟；次日 04:05 | 跑 `tick`，幂等；**不依赖采集进程** |
+| `WhatIDid-Recorder` | At login | Resident capture; no execution time limit, restarted every minute if killed |
+| `WhatIDid-Report` | Every 20 minutes from 21:00 for 2 hours; 3 minutes after login; 04:05 the next day | Runs `tick`, idempotent; **does not depend on the capture process** |
 
-两个任务都以"仅在用户登录时运行"注册。若改成"不管用户是否登录"，进程会落在 Session 0，那里没有桌面，截出来是全黑的。
+Both tasks are registered as "run only when the user is logged on". Switching to "run whether or not the user is logged on" lands the process in Session 0, which has no desktop — every screenshot comes out black.
 
-## 数据流
+## Data flow
 
-| 步骤 | 输入 | 输出 | 主要模块 |
+| Step | Input | Output | Main module |
 | --- | --- | --- | --- |
-| 采样 | 定时器（20±3 秒） | 一条事件 + 可选截图 | `capture.py` |
-| 去重 | 截图指纹 | 保留 / 丢弃 | `vision.py` |
-| 识别 | 活动窗口原生分辨率截图 | 脱敏文本 | `ocr.py` |
-| 分块 | 事件流 | 活动块 `b-YYYYMMDD-HHMM-xxxx` | `blocks.py` |
-| 分段 | 活动块 | 行为段 `seg-NN` | `behavior.py` |
-| 引用 | 标题与 OCR 文本 | `ref_id` 与可点链接 | `refs/` |
-| 压缩 | 块、段、统计、引用、人工补录 | 受字符预算约束的 payload | `digest.py` |
-| 推理 | payload + 提示词 | 严格 JSON | `llm.py` |
-| 校验 | 模型 JSON | 结构化日报或问题清单 | `validate.py` |
-| 落盘 | 日报数据 | `reports/<日期>.json/.md`、`web/` | `render.py`、`report.py` |
+| Sample | Timer (20±3 s) | One event + optional screenshot | `capture.py` |
+| Dedupe | Screenshot fingerprint | Keep / discard | `vision.py` |
+| Recognize | Active window screenshot at native resolution | Redacted text | `ocr.py` |
+| Block | Event stream | Activity block `b-YYYYMMDD-HHMM-xxxx` | `blocks.py` |
+| Segment | Activity blocks | Behavior segment `seg-NN` | `behavior.py` |
+| Reference | Titles and OCR text | `ref_id` and clickable links | `refs/` |
+| Compress | Blocks, segments, stats, references, manual entries | Payload constrained by a character budget | `digest.py` |
+| Infer | Payload + prompt | Strict JSON | `llm.py` |
+| Validate | Model JSON | Structured report, or a list of issues | `validate.py` |
+| Persist | Report data | `reports/<date>.json/.md`, `web/` | `render.py`, `report.py` |
 
-三段值得展开：
+Three of these are worth expanding.
 
-**采样与去重。** 每次采样读前台窗口的句柄、标题、进程名、矩形，以及空闲秒数与锁屏状态。截图默认只抓活动窗口，用 dHash 汉明距离与 12×8 网格均值差共同判断"是否变化"；变化帧落盘，画面长期不变时按 `keyframe_sec` 留关键帧，保证时间轴不断档。窗口矩形拿不到或裁剪失败时**跳过这一帧，不回退全屏**——宁可少记，不可错记。
+**Sampling and dedupe.** Every sample reads the foreground window's handle, title, process name and rectangle, plus idle seconds and lock-screen state. By default only the active window is captured, and dHash Hamming distance together with the mean difference over a 12×8 grid decides whether anything "changed". Changed frames go to disk; when the picture stays static for a long time, keyframes are kept every `keyframe_sec` so the timeline never has a hole. If the window rectangle is unavailable or cropping fails, **the frame is skipped; it does not fall back to the full screen** — better to record less than to record it wrong.
 
-**分块与分段。** 相邻事件间隔超过 `gap_threshold_min` 就断开；单块最长 `max_block_min`（默认 30 分钟）强制切开；块内被暂停、锁屏、名单屏蔽覆盖的区间从 `active_seconds` 中扣除，单独记为 `idle_minutes`。行为段进一步按主分类变化切分，单段最长 `max_session_min`，并补 `start_iso` / `end_iso` 以避免跨午夜错位。
+**Blocks and segments.** Adjacent events further apart than `gap_threshold_min` break the block; a single block is capped at `max_block_min` (30 minutes by default). Intervals inside a block covered by pause, lock screen or the blocklists are subtracted from `active_seconds` and recorded separately as `idle_minutes`. Behavior segments are split further whenever the primary category changes, capped at `max_session_min`, and carry `start_iso` / `end_iso` so a segment crossing midnight does not end up misplaced.
 
-块的 ID 是 `b-YYYYMMDD-HHMM-<hash4(app+title)>`，只由当天日期、块起始分钟与应用/标题决定。**重跑、补数据、重新分块都不会改变它**，所以它可以作为 HTML 锚点，也可以被外部文档反向引用。
+A block's ID is `b-YYYYMMDD-HHMM-<hash4(app+title)>`, decided only by the day, the block's starting minute and the app/title. **Re-runs, backfills and re-blocking never change it**, so it works as an HTML anchor and can be back-referenced from external documents.
 
-**压缩与校验。** `digest.py` 把一天压进 `llm.input_char_budget`（默认 24,000 字符）：先给统计、块清单、行为段、引用分配额度，逐档裁剪，最后兜底截断并注明截掉了什么。模型返回后 `validate.py` 检查每个 `block_id` / `ref_id` / `seg_id` 是否真实存在，缺失或伪造的引用记入 `issues`；JSON 结构坏掉时把错误回灌重试一次，仍失败则降级。
+**Compression and validation.** `digest.py` squeezes a day into `llm.input_char_budget` (24,000 characters by default): stats, block list, behavior segments and references each get an allowance, trimmed step by step, and finally hard-truncated with a note of what was cut. After the model answers, `validate.py` checks that every `block_id` / `ref_id` / `seg_id` actually exists; missing or invented references go into `issues`. If the JSON structure is broken, the error is fed back and retried once; if that fails too, it degrades.
 
-## 时间口径
+## How time is defined
 
-- **工作日不是自然日**：一天从 `app.day_cutoff_hour`（默认 04:00）开始，到次日 04:00 结束。凌晨 2 点干的活算前一天，避免熬夜把一天劈成两半。所有"今天""昨天"都走同一套时间工具。
-- **观测时长 ≠ 工时**：`active_seconds` 是墙钟跨度减去暂停与锁屏区间。它仍然只是"有屏幕活动"的度量，阅读、看课这类没有输入的动作会被低估。
-- **行为段用墙钟**："连续工作多久被打断"看的是墙钟，不扣除空闲。
-- **节奏指标按行为段算**：活动块会被 30 分钟上限截断，用它算"最长连续专注"永远只能得到 30 分钟。
+- **A workday is not a calendar day**: a day starts at `app.day_cutoff_hour` (04:00 by default) and ends at 04:00 the next morning. Work done at 2 a.m. counts towards the previous day, so a late night does not split a day in two. Every "today" and "yesterday" goes through the same time utilities.
+- **Observed duration ≠ working hours**: `active_seconds` is the wall-clock span minus pauses and lock screen. It is still only a measure of "there was screen activity"; actions without input such as reading or watching a lecture are underestimated.
+- **Behavior segments use wall-clock time**: "how long before the flow was interrupted" is measured against the wall clock, idle time included.
+- **Rhythm metrics are computed from behavior segments**: activity blocks are cut at the 30-minute cap, so computing "longest focus" from them could never exceed 30 minutes.
 
-## 出报调度与状态
+## Report scheduling and state
 
-出报状态被拆成四个独立维度，存在 `state/day/<日期>.json`：
+Report state is split into four independent dimensions, stored in `state/day/<date>.json`:
 
-| 字段 | 含义 |
+| Field | Meaning |
 | --- | --- |
-| `coverage_until_iso` | 这份报告的数据覆盖到哪个时刻 |
-| `status` | `ok` / `degraded` / `empty`，模型是否真的成功 |
-| `input_hash` | 事件流与 OCR 流的指纹，迟到数据会改变它 |
-| `revision` | 第几版 |
+| `coverage_until_iso` | The moment this report's data covers up to |
+| `status` | `ok` / `degraded` / `empty` — whether the model actually succeeded |
+| `input_hash` | Fingerprint of the event and OCR streams; late-arriving data changes it |
+| `revision` | Which version this is |
 
-拆开的原因：只看"出过报"这一个布尔值，一份"覆盖完整但模型失败"的降级版会永远不再升级。现在四个维度分开判断，降级版在 `report.degraded_retry_hours` 内、且未超过 `report.max_upgrade_attempts` 时会自动重试升级成 AI 版。
+The reason for splitting them: with a single "a report exists" boolean, a degraded report that covers the day completely but failed at the model stage would never be upgraded. Now the four dimensions are judged separately, and a degraded report is retried and upgraded to the AI version automatically while it is within `report.degraded_retry_hours` and has not exceeded `report.max_upgrade_attempts`.
 
-触发链：
+The trigger chain:
 
 ```
-WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐天 report.generate()
-界面提示 / doctor  ─┘                （唯一的"该不该出报"判断）
-采集进程巡检 ───────┘
+WhatIDid-Report task → tick.run() → tick.pending(cfg, now, days) → report.generate() per day
+UI hint / doctor                   ─┘        (the only "should a report run" decision)
+Capture watchdog                   ─┘
 ```
 
-`tick.pending()` 同时处理这些情况：已覆盖到窗口末尾就跳过；有新增覆盖且距上次出报超过 `refresh_gap_min` 才允许增量更新；存在新鲜待审内容时返回"等待审核确认"而不是"漏报"；当天完全没数据不生成空日报。
+`tick.pending()` handles all of these cases: skip when coverage already reaches the end of the window; allow an incremental update only when there is new coverage and more than `refresh_gap_min` has passed since the last generation; return "awaiting review" instead of "missed" when fresh content is waiting for confirmation; generate nothing for a day with no data at all.
 
-## 模块职责
+## Module responsibilities
 
-| 层 | 模块 | 职责 |
+| Layer | Module | Responsibility |
 | --- | --- | --- |
-| 采集 | `capture.py` | 采样、隐私判断、截图、去重、落盘、投递 OCR |
-| | `winapi.py` | DPI 感知、前台窗口、进程名、空闲、锁屏、显示器几何 |
-| | `vision.py` | dHash、网格指纹、分类、降采样、原子写 |
-| | `ocr.py` | 引擎选择与降级、队列、配额、看门狗、恢复探测 |
-| 加工 | `blocks.py` | 事件 → 活动块，稳定 ID，统计 |
-| | `behavior.py` | 活动块 → 行为段；动词词表是唯一来源 |
-| | `digest.py` | 压缩进预算；提示词 |
-| | `refs/` | 引用抽取、解析、去重、缓存 |
-| 出报 | `llm.py` | OpenAI 兼容客户端、调用预算、出口脱敏 |
-| | `validate.py` | 结构校验与问题清单 |
-| | `report.py` | 编排、状态、审核、降级与升级 |
-| | `tick.py` | 计划任务入口与唯一判断 |
-| 呈现 | `render.py` | Markdown 与静态看板渲染 |
-| | `templates/` | Jinja2 模板 |
-| | `gui.py` / `tray.py` | 图形界面与托盘 |
-| 数据 | `paths.py` | 路径单一来源，禁止在别处拼路径 |
-| | `config.py` | 配置加载、校验、原子保存、失效处置 |
-| | `privacy.py` | 采集许可、匿名事件、脱敏、回环地址校验 |
-| | `retention.py` | 滚动清理 |
-| | `forget.py` | 遗忘 |
-| | `manual.py` | 人工补录与改标 |
-| | `search.py` / `weekly.py` / `export_safe.py` | 检索、周汇总、分享版 |
-| 基础设施 | `daemon.py` | 常驻采集、单实例、看门狗、每日清理 |
-| | `control.py` / `status.py` / `doctor.py` | 启停、状态快照、自检（CLI 与界面共用） |
-| | `autostart.py` | 计划任务与注册表降级 |
-| | `locking.py` / `logging_setup.py` / `timeutil.py` | 互斥量、日志、时间 |
+| Capture | `capture.py` | Sampling, privacy decisions, screenshots, dedupe, persistence, handing off to OCR |
+| | `winapi.py` | DPI awareness, foreground window, process name, idle, lock screen, monitor geometry |
+| | `vision.py` | dHash, grid fingerprint, classification, downscaling, atomic writes |
+| | `ocr.py` | Engine selection and fallback, queue, quota, watchdog, recovery probing |
+| Processing | `blocks.py` | Events → activity blocks, stable IDs, statistics |
+| | `behavior.py` | Activity blocks → behavior segments; the verb vocabulary is the only source |
+| | `digest.py` | Compression into the budget; prompts |
+| | `refs/` | Reference extraction, resolution, dedupe, caching |
+| Reporting | `llm.py` | OpenAI-compatible client, call budget, outbound redaction |
+| | `validate.py` | Structural validation and the issue list |
+| | `report.py` | Orchestration, state, review, degradation and upgrade |
+| | `tick.py` | Scheduled-task entry point and the single decision |
+| Presentation | `render.py` | Markdown and static dashboard rendering |
+| | `templates/` | Jinja2 templates |
+| | `gui.py` / `tray.py` | GUI and tray |
+| Data | `paths.py` | The single source of paths; joining paths anywhere else is forbidden |
+| | `config.py` | Config loading, validation, atomic saving, handling of invalid config |
+| | `privacy.py` | Capture permission, anonymous events, redaction, loopback address checks |
+| | `retention.py` | Rolling cleanup |
+| | `forget.py` | Forget |
+| | `manual.py` | Manual entries and relabeling |
+| | `search.py` / `weekly.py` / `export_safe.py` | Search, weekly summary, shareable export |
+| Infrastructure | `daemon.py` | Resident capture, single instance, watchdog, daily cleanup |
+| | `control.py` / `status.py` / `doctor.py` | Start/stop, status snapshot, self-check (shared by CLI and UI) |
+| | `autostart.py` | Scheduled tasks and the registry fallback |
+| | `locking.py` / `logging_setup.py` / `timeutil.py` | Mutex, logging, time |
 
-## 数据模型
+## Data model
 
-**事件**（`data/<日期>/events.jsonl`，每行一条）：
+**Event** (`data/<date>/events.jsonl`, one per line):
 
 ```json
 {"v": 1, "ts": "2026-10-19T09:12:00+08:00", "day": "2026-10-19",
@@ -135,9 +137,9 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
  "seq": 1, "cls": "tick", "diff": 0.01, "hash": "f2a74de452e6b438", "kind": "tick"}
 ```
 
-`state` 取值包括 `active` / `idle` / `paused` / `locked`；暂停与屏蔽状态下只写匿名刻度，不含应用名与标题。
+`state` is one of `active` / `idle` / `paused` / `locked`; in the paused and blocked states only an anonymous tick is written, without app name or title.
 
-**活动块**（`reports/<日期>.json` 的 `blocks[]`）：
+**Activity block** (`blocks[]` in `reports/<date>.json`):
 
 ```json
 {"id": "b-20261019-0912-0d56",
@@ -146,20 +148,20 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
  "minutes": 30, "content_policy": "allowed", "shots": [], "text": "", "switch_count": 0}
 ```
 
-`content_policy` 三档：`allowed`（完整）、`metadata_only`（只有应用与时长）、`none`（匿名）。它在块生成时就算好，重新出报时按**当前**隐私配置重算。
+`content_policy` has three levels: `allowed` (full), `metadata_only` (app and duration only), `none` (anonymous). It is worked out when the block is created and recomputed against the **current** privacy configuration on every re-generation.
 
-**日报**（`reports/<日期>.json`）顶层：`schema_version`、`day`、`weekday`、`generated_at`、`revision`、`status`、`reason`、`coverage`、`report`、`stats`、`gaps`、`blocks`、`refs`、`manual`、`meta`。
+**Report** (`reports/<date>.json`) top level: `schema_version`, `day`, `weekday`, `generated_at`, `revision`, `status`, `reason`, `coverage`, `report`, `stats`, `gaps`, `blocks`, `refs`, `manual`, `meta`.
 
-其中 `report` 是模型产出的结构化内容（`headline`、`opening_md`、`summary_md`、`behaviors`、`highlights`、`followups`、`friction`、`insight`、`timeline`、`accomplishments` 等），`meta` 记录模型、调用次数、token、payload 大小与校验问题。
+`report` holds the structured content the model produced (`headline`, `opening_md`, `summary_md`, `behaviors`, `highlights`, `followups`, `friction`, `insight`, `timeline`, `accomplishments` and so on); `meta` records the model, call count, tokens, payload size and validation issues.
 
-阅读顺序由渲染层派生，不写死在模型输出里。`render.reading_view()` 是唯一的派生入口：
+The reading order is derived by the render layer, never hard-coded in the model output. `render.reading_view()` is the only derivation entry point:
 
-- `highlights` 每条带 `status`（`done|advanced|waiting|blocked|unresolved`）与 `next`，渲染成首屏成果卡；旧日报没有这两个字段时按文字推断，判定函数只有 `behavior.outcome_status()` 一处。
-- `followups` 是需要行动的事；旧日报没有时由 `friction`（未解决）与 `tomorrow` 合成。
-- 主时间轴由 `behavior.group_tasks()` 把 `behaviors` 合并成 4–6 段（同动词、断档 ≤25 分钟、单段 ≤150 分钟），锁屏/离开段排除。
-- 活动块、原始色带、全部文档、OCR、数据缺口、生成信息一律进页面底部折叠附录；正文只保留挂在成果卡上的文档与最多 3 张截图。
+- Each `highlights` entry carries a `status` (`done|advanced|waiting|blocked|unresolved`) and a `next`, and renders as a first-screen outcome card; for older reports missing both fields the status is inferred from the text, and the deciding function exists only as `behavior.outcome_status()`.
+- `followups` are the things that need action; for older reports they are synthesized from `friction` (unresolved) and `tomorrow`.
+- The main timeline comes from `behavior.group_tasks()` merging `behaviors` into 4–6 segments (same verb, gap ≤25 minutes, segment ≤150 minutes), with lock-screen and away segments excluded.
+- Activity blocks, the original strips, all documents, OCR, data gaps and generation info all go into a collapsed appendix at the bottom of the page; the body keeps only documents attached to outcome cards and at most 3 screenshots.
 
-**人工补录**（`data/<日期>/manual.json`）：
+**Manual entries** (`data/<date>/manual.json`):
 
 ```json
 {"offline": [{"start": "10:00", "end": "11:00", "label": "线下客户沟通", "note": ""}],
@@ -167,37 +169,37 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
  "notes": "今天在等接口"}
 ```
 
-它与自动产物完全分离：重跑、清理都不会动它，每次出报重新套用一遍，**用户修订永远赢**。
+These are kept completely separate from automatic output: re-runs and cleanup never touch them, they are re-applied on every generation, and **user revisions always win**.
 
-## 存储布局
+## Storage layout
 
 ```
-<数据目录>\
-  config.yaml              配置源
-  config\api_key.txt       模型 Key（或环境变量 WID_LLM_API_KEY）
-  config\bindings.yaml     手工把某个项目固定挂到某份文档
-  data\<日期>\
-    events.jsonl           事件流
-    ocr.jsonl              脱敏后的识别结果
-    manual.json            人工补录与改标
-    shots\ thumbs\         变化帧与缩略图
-  reports\<日期>.md/.json  日报
-  reports\share\           对外分享版
-  reports\weekly\          周汇总
-  web\                     静态看板（index.html 与 day\*.html）
-  state\                   心跳、每日状态、待审预览、锁、暂停标记
-  logs\                    采集与出报日志（5 MB 滚动）
+<data dir>\
+  config.yaml              config source
+  config\api_key.txt       model key (or the WID_LLM_API_KEY environment variable)
+  config\bindings.yaml     pin a project to a document by hand
+  data\<date>\
+    events.jsonl           event stream
+    ocr.jsonl              redacted recognition results
+    manual.json            manual entries and relabeling
+    shots\ thumbs\         changed frames and thumbnails
+  reports\<date>.md/.json  daily reports
+  reports\share\           shareable exports
+  reports\weekly\          weekly summaries
+  web\                     static dashboard (index.html and day\*.html)
+  state\                   heartbeat, day state, review previews, locks, pause marker
+  logs\                    capture and report logs (5 MB rolling)
 ```
 
-数据目录的解析顺序：`WID_HOME` → 程序目录（可写则用，便携）→ `%LOCALAPPDATA%\What-IDid`。程序资源（模板、默认配置、内置模型）走只读的安装目录，运行数据全部写入上述目录，两者不混。
+The data directory is resolved in this order: `WID_HOME` → the program directory (used when writable, portable) → `%LOCALAPPDATA%\What-IDid`. Program resources (templates, default config, built-in models) come from the read-only install directory; all runtime data goes to the directory above. The two are never mixed.
 
-## 扩展点
+## Extension points
 
-| 想做什么 | 改哪里 |
+| If you want to | Change |
 | --- | --- |
-| 加一种文档来源 | 在 `src/refs/providers.py` 写一个 `BaseProvider` 子类，实现 `probe()` / `resolve()`，把名字加进 `refs.providers`。数据 schema、页面、日报逻辑都不用动 |
-| 接知识库 | 实现 `KBProvider.resolve()` 返回 `kb://<collection>/<doc_id>#<anchor>`，再填 `refs.kb.url_template` |
-| 手工绑定文档 | 在 `config/bindings.yaml` 写 `title_contains` 规则，优先级高于自动解析 |
-| 加一种采集方式 | `capture.py` 的采样入口是唯一入口，把新来源拼成同样的事件结构即可，后续模块不关心来源 |
-| 换排版 | 只改 `src/templates/`。模板里不能用 `trim_blocks` 看不见的换行，排版空行交给渲染后的后处理 |
-| 加子命令 | `wid.py` 里注册，并在 `build.spec` 的 `MODULES` 里补上新模块名——那份清单是手写的，静态分析看不到按需导入 |
+| Add a document source | Write a `BaseProvider` subclass in `src/refs/providers.py`, implement `probe()` / `resolve()`, and add the name to `refs.providers`. The data schema, pages and report logic stay untouched |
+| Hook up a knowledge base | Implement `KBProvider.resolve()` to return `kb://<collection>/<doc_id>#<anchor>`, then fill in `refs.kb.url_template` |
+| Bind a document by hand | Write a `title_contains` rule in `config/bindings.yaml`; it takes priority over automatic resolution |
+| Add a capture method | The sampling entry point in `capture.py` is the only one; shape the new source into the same event structure and downstream modules will not care where it came from |
+| Change the layout | Only touch `src/templates/`. Avoid newlines made invisible by `trim_blocks`; leave blank-line layout to post-processing after rendering |
+| Add a subcommand | Register it in `wid.py` and add the new module name to `MODULES` in `build.spec` — that list is hand-written, and static analysis cannot see lazy imports |

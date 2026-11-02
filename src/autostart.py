@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import os
 import subprocess
 import sys
@@ -114,7 +116,7 @@ _SHELL = """<?xml version="1.0" encoding="UTF-16"?>
 def _task_xml() -> str:
     """常驻采集：登录即起，崩溃每分钟重启，不限时长。"""
     return _SHELL.format(
-        desc="What-I-Did 工作过程自动记录（用户级，无需管理员）",
+        desc=t("What-I-Did work log recorder (per-user, no admin rights needed)"),
         triggers=("    <LogonTrigger>\n"
                   "      <Enabled>true</Enabled>\n"
                   f"      <UserId>{_user_id()}</UserId>\n"
@@ -171,7 +173,8 @@ def _report_task_xml(cfg=None) -> str:
         "    </CalendarTrigger>",
     ])
     return _SHELL.format(
-        desc="What-I-Did 日报生成（每天 21:00 起重试、登录补跑、次日终版）",
+        desc=t("What-I-Did daily report (retries from {hour:02d}:00, catch-up at logon, "
+                "final version the next day)", hour=hour),
         triggers=triggers,
         user=_user_id(),
         settings=_SETTINGS.format(wake="true", limit="PT2H", restart=3),
@@ -194,7 +197,7 @@ def _run_ps(script: str, timeout: int = 30):
 
 
 def _ps_error(r) -> str:
-    return ((r.stderr or "") + (r.stdout or "")).strip() or "PowerShell 调用失败"
+    return ((r.stderr or "") + (r.stdout or "")).strip() or t("PowerShell call failed")
 
 
 def _create_task_ps(name: str, xml: str) -> str:
@@ -261,12 +264,12 @@ def _create_task(name: str, xml: str) -> str:
     except OSError as exc:
         # 安全策略把 schtasks.exe 列进黑名单时，连进程都起不来
         errors.append(f"schtasks: {exc}")
-        raise RuntimeError("；".join(errors)[:400]) from exc
+        raise RuntimeError(t("; ").join(errors)[:400]) from exc
     finally:
         tmp.unlink(missing_ok=True)
     if r.returncode != 0:
-        errors.append(f"schtasks: {(r.stderr or r.stdout or '创建失败').strip()}")
-        raise RuntimeError("；".join(errors)[:400])
+        errors.append("schtasks: " + (r.stderr or r.stdout or t("creation failed")).strip())
+        raise RuntimeError(t("; ").join(errors)[:400])
     return name
 
 
@@ -283,11 +286,12 @@ def _delete_task(name: str) -> str:
         )
     except OSError as exc:
         raise RuntimeError(
-            f"Register-ScheduledTask: {first}；schtasks: {exc}"[:400]) from exc
+            t("Register-ScheduledTask: {first}; schtasks: {second}", first=first,
+              second=exc)[:400]) from exc
     if r.returncode != 0:
         raise RuntimeError(
-            f"Register-ScheduledTask: {first}；schtasks: "
-            f"{(r.stderr or r.stdout or '删除失败').strip()}"[:400])
+            t("Register-ScheduledTask: {first}; schtasks: {second}", first=first,
+              second=(r.stderr or r.stdout or t("deletion failed")).strip())[:400])
     return name
 
 
@@ -354,31 +358,36 @@ def install(cfg=None) -> str:
     # 1) 常驻采集
     try:
         _create_task(TASK_NAME, _task_xml())
-        msgs.append(f"采集任务 {TASK_NAME} 已创建（登录即启动，隐藏窗口，崩溃自动重启）")
+        msgs.append(t("Capture task {name} created (starts at logon, hidden window, "
+                      "restarts after a crash)", name=TASK_NAME))
         # 计划任务成功后清掉可能残留的 Run 项，避免双启
         if _run_read():
             _run_delete()
-            msgs.append("已清除旧的注册表启动项")
+            msgs.append(t("Removed the stale registry startup entry"))
     except Exception as exc:
         detail = str(exc)[:120]
         try:
             _run_write(_command_line("daemon"))
-            msgs.append(f"计划任务创建失败（{detail}），已改用注册表启动项"
-                        f"（注意：此方式无法崩溃自启）")
+            msgs.append(t("Scheduled task creation failed ({detail}); fell back to a registry "
+                          "startup entry (note: it cannot restart after a crash)",
+                          detail=detail))
         except Exception as exc2:
-            msgs.append(f"计划任务与注册表都失败：{detail} / {exc2}")
+            msgs.append(t("Both the scheduled task and the registry entry failed: "
+                          "{first} / {second}", first=detail, second=exc2))
 
     # 2) 出报定时：与采集任务解耦，采集停了也照样出报
     try:
         _create_task(REPORT_TASK_NAME, _report_task_xml(cfg))
         hour = int((cfg.get("report.trigger_hour", 21) if cfg else 21))
-        msgs.append(f"出报任务 {REPORT_TASK_NAME} 已创建（每天 {hour:02d}:00 起每 20 分钟重试、"
-                    f"登录补跑、次日终版）")
+        msgs.append(t("Report task {name} created (retries every 20 minutes from "
+                      "{hour:02d}:00, catch-up at logon, final version the next day)",
+                      name=REPORT_TASK_NAME, hour=hour))
     except Exception as exc:
-        msgs.append(f"出报任务创建失败（{str(exc)[:120]}）：日报改由常驻进程在到点时兜底触发，"
-                    f"但采集进程没跑时不会自动出报")
+        msgs.append(t("Report task creation failed ({detail}); the resident process will "
+                      "trigger reports when the time comes, but nothing is generated "
+                      "while capture is not running", detail=str(exc)[:120]))
 
-    return "；".join(msgs)
+    return t("; ").join(msgs)
 
 
 def uninstall() -> str:
@@ -387,16 +396,16 @@ def uninstall() -> str:
         try:
             if task_exists(name):
                 _delete_task(name)
-                done.append(f"{name} 已删除")
+                done.append(t("{name} deleted", name=name))
         except Exception as exc:
-            done.append(f"删除 {name} 失败：{exc}")
+            done.append(t("Failed to delete {name}: {e}", name=name, e=exc))
     try:
         if _run_read():
             _run_delete()
-            done.append("注册表启动项已删除")
+            done.append(t("Registry startup entry removed"))
     except Exception as exc:
-        done.append(f"删除注册表项失败：{exc}")
-    return "；".join(done) or "没有找到已注册的自启动项"
+        done.append(t("Failed to remove the registry entry: {e}", e=exc))
+    return t("; ").join(done) or t("No startup entry found")
 
 
 def status() -> dict:

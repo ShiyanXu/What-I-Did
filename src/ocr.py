@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import base64
 import copy
 import json
@@ -65,9 +67,9 @@ def _parse_payload(payload) -> str:
         parts: list[str] = []
         for item in payload:
             if isinstance(item, dict):
-                t = str(item.get("text", ""))
+                txt = str(item.get("text", ""))
                 end = str(item.get("end", "") or "")
-                parts.append(t + ("\n" if end in ("\n", "\\n") else " " if end == " " else ""))
+                parts.append(txt + ("\n" if end in ("\n", "\\n") else " " if end == " " else ""))
             else:
                 parts.append(str(item))
         return "".join(parts).strip()
@@ -143,15 +145,16 @@ class UmiHttpEngine(BaseEngine):
         finally:
             sess.close()
         if r.status_code != 200:
-            raise OcrError(f"OCR HTTP {r.status_code}（不跟随重定向，响应正文未记录）")
+            raise OcrError(t("OCR HTTP {code} (redirects not followed; response body not recorded)",
+                             code=r.status_code))
         try:
             payload = r.json()
         except ValueError as exc:
-            raise OcrError("OCR 响应不是 JSON（响应正文未记录）") from exc
+            raise OcrError(t("OCR response is not JSON (response body not recorded)")) from exc
         if isinstance(payload, dict):
             code = payload.get("code")
             if code not in (100, 0, None):
-                raise OcrError("Umi-OCR 返回失败状态（响应正文未记录）")
+                raise OcrError(t("Umi-OCR returned a failure status (response body not recorded)"))
         return _clean(_parse_payload(payload))
 
     def recognize(self, img: Path, timeout: float = 0) -> str:
@@ -167,7 +170,8 @@ class UmiHttpEngine(BaseEngine):
                     time.sleep(0.8)
                     continue
                 break
-        raise OcrError(f"OCR HTTP 不可用（{type(last).__name__}，请求细节未记录）")
+        raise OcrError(t("OCR HTTP is unavailable ({err}; request details not recorded)",
+                         err=type(last).__name__))
 
 
 class UmiCliEngine(BaseEngine):
@@ -185,7 +189,7 @@ class UmiCliEngine(BaseEngine):
 
     def recognize(self, img: Path, timeout: float = 0) -> str:
         if not self.available():
-            raise OcrError(f"umi_exe 不存在: {self.exe}")
+            raise OcrError(t("umi_exe does not exist: {path}", path=self.exe))
         if self.launcher:
             self.launcher()  # 确保常驻实例在，否则 --path 必然失败
         timeout = timeout or self.timeout
@@ -200,13 +204,13 @@ class UmiCliEngine(BaseEngine):
                 creationflags=CREATE_NO_WINDOW,
             )
             if not out.exists():
-                raise OcrError("未生成输出文件")
+                raise OcrError(t("No output file was produced"))
             text = _clean(out.read_text(encoding="utf-8", errors="ignore"))
             if _looks_like_error(text):
-                raise OcrError("Umi 返回错误文本（正文未记录）")
+                raise OcrError(t("Umi returned error text (body not recorded)"))
             return text
         except subprocess.TimeoutExpired as exc:
-            raise OcrError(f"识别超时 {timeout}s") from exc
+            raise OcrError(t("Recognition timed out after {n}s", n=timeout)) from exc
         finally:
             try:
                 out.unlink(missing_ok=True)
@@ -311,7 +315,7 @@ class RapidEngine(BaseEngine):
         eng = self._instance()
         timeout = float(timeout or 0)
         if self._busy.is_set():
-            raise OcrError("上一次识别仍未返回，暂不接收新任务")
+            raise OcrError(t("The previous recognition has not returned yet; not accepting new tasks"))
         if timeout <= 0:
             self._busy.set()
             try:
@@ -329,12 +333,12 @@ class RapidEngine(BaseEngine):
                 self._busy.clear()
 
         self._busy.set()
-        t = threading.Thread(target=work, name="rapidocr-call", daemon=True)
-        t.start()
-        t.join(timeout)
-        if t.is_alive():
+        worker = threading.Thread(target=work, name="rapidocr-call", daemon=True)
+        worker.start()
+        worker.join(timeout)
+        if worker.is_alive():
             # 线程还在跑：不清 _busy，让后续任务直接失败，直到它自然返回
-            raise OcrError(f"识别超时 {timeout:.0f}s，已放弃等待")
+            raise OcrError(t("Recognition timed out after {n}s; gave up waiting", n=f"{timeout:.0f}"))
         if "err" in holder:
             raise holder["err"]
         return holder.get("out", "")
@@ -348,8 +352,8 @@ class RapidEngine(BaseEngine):
             txts = [r[1] for r in rows if len(r) > 1]
             scores = [r[2] for r in rows if len(r) > 2]
         kept: list[str] = []
-        for i, t in enumerate(txts or []):
-            text = str(t).strip()
+        for i, item_text in enumerate(txts or []):
+            text = str(item_text).strip()
             if not text or _is_noise(text):
                 continue
             if scores is not None and i < len(scores):
@@ -399,10 +403,11 @@ class InstanceManager:
                 )
                 self.spawn_count += 1
                 if self.log:
-                    self.log.info("拉起 Umi-OCR 常驻实例（第 %d 次）", self.spawn_count)
+                    self.log.info("Starting the Umi-OCR resident instance (attempt %d)",
+                                  self.spawn_count)
             except Exception as exc:
                 if self.log:
-                    self.log.warning("拉起 Umi-OCR 失败: %s", exc)
+                    self.log.warning("Failed to start Umi-OCR: %s", exc)
                 return False
         deadline = time.time() + wait
         while time.time() < deadline:
@@ -410,7 +415,7 @@ class InstanceManager:
                 return True
             time.sleep(0.5)
         if self.log:
-            self.log.warning("Umi-OCR 在 %.0fs 内未就绪", wait)
+            self.log.warning("Umi-OCR was not ready within %.0fs", wait)
         return False
 
 
@@ -505,7 +510,7 @@ class OcrQueue:
     def _next_engine(self) -> None:
         self._engine_idx = (self._engine_idx + 1) % len(self._engines)
         if self.log:
-            self.log.warning("OCR 切换到引擎: %s", self.current_engine().name)
+            self.log.warning("OCR switching to engine: %s", self.current_engine().name)
 
     def _load_done_ids(self) -> None:
         if not paths.DATA.exists():
@@ -565,7 +570,8 @@ class OcrQueue:
             started = self._task_started_at
             if started and time.time() - started > limit:
                 if self.log:
-                    self.log.error("OCR 看门狗：单任务超 %.0fs 未返回，重启工作线程", limit)
+                    self.log.error("OCR watchdog: one task ran over %.0fs; restarting the worker",
+                                   limit)
                 self._start_worker()
 
     def stop(self, timeout: float = 60) -> None:
@@ -581,10 +587,10 @@ class OcrQueue:
     def can_accept(self, day: str, now_ts: float | None = None) -> tuple[bool, str]:
         now_ts = now_ts or time.time()
         if self._day_counts.get(day, 0) >= int(self.cfg.get("ocr.max_per_day", 1200)):
-            return False, "日配额已满"
+            return False, t("Daily quota is full")
         self._recent = [t for t in self._recent if now_ts - t < 60]
         if len(self._recent) >= int(self.cfg.get("ocr.max_per_minute", 6)):
-            return False, "分钟配额已满"
+            return False, t("Per-minute quota is full")
         return True, ""
 
     def submit(self, ocr_id: str, day: str, img: Path, app: str = "", title: str = "", *,
@@ -623,7 +629,8 @@ class OcrQueue:
                 self._process(task)
             except Exception as exc:
                 if self.log:
-                    self.log.error("OCR 任务异常（%s，未记录原始异常正文）", type(exc).__name__)
+                    self.log.error("OCR task error (%s; original exception body not recorded)",
+                                   type(exc).__name__)
             finally:
                 self._task_started_at = 0.0
                 self._cleanup(task)
@@ -658,7 +665,8 @@ class OcrQueue:
                     self._consecutive_fail = 0
                     self._cooldown_until = 0.0
                     if self.log:
-                        self.log.info("OCR 引擎恢复：%s 重新可用，已切回", eng.name)
+                        self.log.info("OCR engine recovered: %s is available again; switching back",
+                                      eng.name)
                     return
             except Exception:
                 continue
@@ -667,15 +675,18 @@ class OcrQueue:
         start = time.time()
         cfg = privacy.current_config(self.cfg)
         if not self._task_allowed(task, cfg):
-            self._record(task, OcrResult(task.ocr_id, "skipped", engine="privacy", error="隐私策略禁止识别"))
+            self._record(task, OcrResult(task.ocr_id, "skipped", engine="privacy",
+                                         error=t("Privacy policy blocks recognition")))
             return
         self._try_recover()
         if time.time() < self._cooldown_until:
-            self._record(task, OcrResult(task.ocr_id, "skipped", engine="cooldown", error="引擎冷却中"))
+            self._record(task, OcrResult(task.ocr_id, "skipped", engine="cooldown",
+                                         error=t("Engine cooling down")))
             return
         engine = self.current_engine()
         if isinstance(engine, NullEngine):
-            self._record(task, OcrResult(task.ocr_id, "skipped", engine="none", error="OCR 未启用"))
+            self._record(task, OcrResult(task.ocr_id, "skipped", engine="none",
+                                         error=t("OCR is not enabled")))
             return
         result = OcrResult(task.ocr_id, engine=engine.name)
         try:
@@ -685,7 +696,8 @@ class OcrQueue:
             self._consecutive_fail = 0
         except Exception as exc:
             result.status = "failed"
-            result.error = f"{engine.name} 识别失败（{type(exc).__name__}，原始错误正文未记录）"
+            result.error = t("{engine}: recognition failed ({err}; original error body "
+                             "not recorded)", engine=engine.name, err=type(exc).__name__)
             self._consecutive_fail += 1
             if self._consecutive_fail >= 3:
                 self._next_engine()
@@ -702,7 +714,7 @@ class OcrQueue:
     def _trim(self, text: str) -> str:
         limit = int(self.cfg.get("ocr.max_chars_per_shot", 6000))
         if len(text) > limit:
-            return text[:limit] + "\n…（截断）"
+            return text[:limit] + t("\n…(truncated)")
         return text
 
     def _record(self, task: _Task, result: OcrResult) -> None:
@@ -710,7 +722,8 @@ class OcrQueue:
         app = ""
         if not self._task_allowed(task, cfg):
             result = OcrResult(task.ocr_id, "skipped", ms=result.ms, engine="privacy",
-                               error="识别期间隐私状态变化，正文未保存")
+                               error=t("Privacy state changed during recognition; "
+                                       "the text was not saved"))
         else:
             result.text = privacy.redact(result.text, cfg)
             result.error = privacy.redact(result.error, cfg)
@@ -734,7 +747,7 @@ class OcrQueue:
         key = result.engine or "?"
         self.stats.by_engine[key] = self.stats.by_engine.get(key, 0) + 1
         if self.log and result.status == "failed":
-            self.log.warning("OCR 失败 %s: %s", task.ocr_id, result.error)
+            self.log.warning("OCR failed %s: %s", task.ocr_id, result.error)
 
     @staticmethod
     def _task_allowed(task: _Task, cfg) -> bool:
@@ -788,7 +801,8 @@ def recognize_once(cfg, img: Path, timeout: float = 0, allow_launch: bool = True
         privacy.require_valid(current)
         if (privacy.is_paused() or winapi.is_locked()
                 or current.get("privacy", {}) != policy or current.get("ocr", {}) != ocr_policy):
-            raise privacy.PrivacyError("暂停、锁屏或识别策略已变化，已停止识别并丢弃结果")
+            raise privacy.PrivacyError(t("Paused, locked or the recognition policy changed; "
+                                         "recognition stopped and the result was discarded"))
         return current
 
     guard()  # 手选图片同样不能绕过暂停、锁屏或无效配置。
@@ -803,7 +817,8 @@ def recognize_once(cfg, img: Path, timeout: float = 0, allow_launch: bool = True
     )
     mode = (cfg.get("ocr.engine", "auto") or "auto").lower()
     if mode == "none":
-        return {"engine": "", "status": "failed", "text": "", "ms": 0, "error": "OCR 已关闭"}
+        return {"engine": "", "status": "failed", "text": "", "ms": 0,
+                "error": t("OCR is turned off")}
     if mode == "rapidocr":
         engines: list[BaseEngine] = [rapid]
     elif mode == "umi_cli":
@@ -819,10 +834,10 @@ def recognize_once(cfg, img: Path, timeout: float = 0, allow_launch: bool = True
     for eng in engines:
         guard()
         if isinstance(eng, UmiCliEngine) and not eng.available():
-            errors.append(f"{eng.name}: exe 不存在")
+            errors.append(t("{engine}: executable not found", engine=eng.name))
             continue
         if isinstance(eng, RapidEngine) and not eng.available():
-            errors.append("rapidocr: 未安装")
+            errors.append(t("rapidocr: not installed"))
             continue
         t0 = time.time()
         try:
@@ -833,9 +848,10 @@ def recognize_once(cfg, img: Path, timeout: float = 0, allow_launch: bool = True
         except privacy.PrivacyError:
             raise
         except Exception as exc:
-            errors.append(f"{eng.name}: 识别失败（{type(exc).__name__}，原始错误正文未记录）")
+            errors.append(t("{engine}: recognition failed ({err}; original error body "
+                            "not recorded)", engine=eng.name, err=type(exc).__name__))
     return {"engine": "", "status": "failed", "text": "", "ms": 0,
-            "error": " | ".join(errors) or "未配置可用 OCR 引擎"}
+            "error": " | ".join(errors) or t("No usable OCR engine is configured")}
 
 
 def recognize_screen(cfg) -> dict:
@@ -846,7 +862,7 @@ def recognize_screen(cfg) -> dict:
     cfg = privacy.current_config(cfg)
     privacy.require_valid(cfg)
     if cfg.get("ocr.engine", "auto") == "none":
-        raise privacy.PrivacyError("OCR 已关闭，未采集诊断截图")
+        raise privacy.PrivacyError(t("OCR is turned off; no diagnostic screenshot was captured"))
     image, fg = capture.diagnostic_image(cfg)
     paths.OCR_TMP.mkdir(parents=True, exist_ok=True)
     tmp = paths.OCR_TMP / f"diagnostic_{uuid.uuid4().hex}.png"
@@ -858,7 +874,8 @@ def recognize_screen(cfg) -> dict:
                 or privacy.should_skip_ocr(fg.get("app", ""), latest)
                 or cfg.get("privacy", {}) != latest.get("privacy", {})
                 or cfg.get("ocr", {}) != latest.get("ocr", {})):
-            raise privacy.PrivacyError("识别期间隐私状态变化，已丢弃结果")
+            raise privacy.PrivacyError(t("Privacy state changed during recognition; "
+                                         "the result was discarded"))
         return result
     finally:
         tmp.unlink(missing_ok=True)

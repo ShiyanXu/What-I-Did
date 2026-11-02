@@ -15,6 +15,11 @@ app:
   day_cutoff_hour: 4        # 凌晨 0-4 点算前一天（熬夜工作归属正确）
   timezone: "Asia/Shanghai"
 
+ui:
+  # 界面语言：en（默认）/ zh-CN / auto（跟随系统）
+  # 只影响界面与日报的标题、标签；日报正文跟随模型输出的语言
+  language: en
+
 capture:
   interval_sec: 20          # 采样间隔（秒）
   jitter_sec: 3             # 随机抖动，避免整齐得像机器人

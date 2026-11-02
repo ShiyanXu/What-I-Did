@@ -13,8 +13,10 @@ import yaml
 
 import blocks as blocks_mod
 import behavior as behavior_mod
+import i18n
 import paths
 import timeutil
+from i18n import t, tn
 
 CAT_COLOR = {
     "dev": "#2563eb",
@@ -26,7 +28,23 @@ CAT_COLOR = {
 }
 CAT_LABEL = blocks_mod.CATEGORY_LABEL
 
-WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+#: 分类名的英文原文（英文是源语言，中文在 i18n_zh_cn 的对照表里补）。
+#: 按代码映射而不是按 CAT_LABEL 的文本映射，这样上游改文案也不会串味。
+CAT_NAME = {
+    "dev": "Dev",
+    "doc": "Docs",
+    "meet": "Meetings",
+    "comm": "Comms",
+    "web": "Browsing",
+    "other": "Other",
+}
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def cat_name(key: str) -> str:
+    """分类代码 -> 当前语言的分类名。"""
+    return t(CAT_NAME.get(str(key or ""), "Other"))
 
 
 def _env(autoescape: bool = True) -> jinja2.Environment:
@@ -42,13 +60,24 @@ def _env(autoescape: bool = True) -> jinja2.Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    env.filters["minutes"] = lambda v: f"{int(v)} 分"
+    env.filters["minutes"] = lambda v: t("{n} min", n=int(v))
     env.filters["pct"] = lambda v: f"{float(v):.1f}%"
     return env
 
 
 def weekday_of(day: str) -> str:
-    return WEEKDAYS[timeutil.parse_day(day).weekday()]
+    return t(WEEKDAYS[timeutil.parse_day(day).weekday()])
+
+
+def weekday_label(stored: str, day: str = "") -> str:
+    """旧日报里 weekday 存的是中文名：按日期重算，别让英文页面里冒出中文。"""
+    raw = str(stored or "").strip()
+    if raw and raw.isascii():
+        return t(raw)
+    try:
+        return weekday_of(day) if day else raw
+    except Exception:
+        return raw
 
 
 def behavior_verbs() -> dict:
@@ -111,11 +140,14 @@ def write_markdown(payload: dict) -> Path:
     text = tpl.render(
         d=payload,
         day=payload["day"],
-        weekday=payload.get("weekday", ""),
-        cat_label=CAT_LABEL,
-        verb_label={k: v["label"] for k, v in behavior_verbs().items()},
+        weekday=weekday_label(payload.get("weekday", ""), payload["day"]),
+        cat_label={k: cat_name(k) for k in CAT_LABEL},
+        verb_label={k: t(v["label"]) for k, v in behavior_verbs().items()},
         # 归档与网页用同一套阅读顺序：成果 → 待办 → 主线 → 过程 → 附录
         rv=reading_view(payload),
+        t=t,
+        tn=tn,
+        lang=i18n.current(),
     )
     out = paths.report_md(payload["day"])
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -163,8 +195,8 @@ def _strip_ticks(payload: dict) -> list[str]:
         return []
     labels = []
     for i in range(4):
-        t = ws + timedelta(hours=6 * i)
-        labels.append(t.strftime("%H:%M"))
+        mark = ws + timedelta(hours=6 * i)
+        labels.append(mark.strftime("%H:%M"))
     labels.append(we.strftime("%H:%M") + "⁺")
     return labels
 
@@ -315,7 +347,7 @@ def outcome_cards(payload: dict, limit: int = 5, max_shots: int = EVIDENCE_SHOTS
     if not raw:
         raw = [it for it in (rep.get("accomplishments") or []) if isinstance(it, dict) and it.get("what")]
         source = "accomplishments"
-    tomorrow = [str(t.get("item") or "") for t in (rep.get("tomorrow") or [])]
+    tomorrow = [str(x.get("item") or "") for x in (rep.get("tomorrow") or [])]
 
     cards: list[dict] = []
     shots_left = max_shots
@@ -326,9 +358,9 @@ def outcome_cards(payload: dict, limit: int = 5, max_shots: int = EVIDENCE_SHOTS
         status = outcome_status(it.get("status"), what, impact, next_step)
         if not next_step and status in ("waiting", "unresolved", "blocked"):
             # 旧日报没有 next：从"明天"里挑一条说得最近的顶上，挑不到就留空
-            for t in tomorrow:
-                if any(k and k in t for k in _keywords(what)):
-                    next_step = t
+            for cand in tomorrow:
+                if any(k and k in cand for k in _keywords(what)):
+                    next_step = cand
                     break
         bids = list(it.get("block_ids") or [])
         shot = _pick_shot(payload, bids) if shots_left > 0 else {}
@@ -336,7 +368,7 @@ def outcome_cards(payload: dict, limit: int = 5, max_shots: int = EVIDENCE_SHOTS
             shots_left -= 1
         label, cls = OUTCOME_STATUS[status]
         cards.append({
-            "status": status, "status_label": label, "status_cls": cls,
+            "status": status, "status_label": t(label), "status_cls": cls,
             "what": what, "impact": impact, "next": next_step,
             "evidence": str(it.get("evidence") or "").strip(),
             "block_ids": bids, "docs": _docs_for(bids, refs, model_refs),
@@ -454,10 +486,11 @@ def head_metrics(payload: dict, cards: list[dict], todos: list[dict]) -> list[di
     stats = payload.get("stats") or {}
     meet = int(round(float((stats.get("by_category") or {}).get("meet", 0) or 0)))
     return [
-        {"n": len(cards), "unit": "项", "k": "今日成果"},
-        {"n": len(todos), "unit": "项", "k": "待跟进"},
-        {"n": round(float(stats.get("active_minutes", 0) or 0) / 60, 1), "unit": "h", "k": "有效活动"},
-        {"n": meet, "unit": "分", "k": "会议"},
+        {"n": len(cards), "unit": t("items"), "k": t("Outcomes today")},
+        {"n": len(todos), "unit": t("items"), "k": t("To follow up")},
+        {"n": round(float(stats.get("active_minutes", 0) or 0) / 60, 1),
+         "unit": "h", "k": t("Active time")},
+        {"n": meet, "unit": t("min"), "k": t("Meetings")},
     ]
 
 
@@ -471,20 +504,20 @@ def _task_segments(payload: dict, tasks: list[dict]) -> list[dict]:
         return []
     span = max(1.0, (we - ws).total_seconds())
     segs = []
-    for t in tasks:
-        pair = _seg_window(payload, t)
+    for task in tasks:
+        pair = _seg_window(payload, task)
         if pair is None:
             continue
         start, end = pair
         s = min(max(0.0, (start - ws).total_seconds()), span)
         e = min(max(s + 60.0, (end - ws).total_seconds()), span)
-        color = behavior_mod.VERBS.get(t.get("verb", ""), behavior_mod.VERBS["admin"])["color"]
+        color = behavior_mod.VERBS.get(task.get("verb", ""), behavior_mod.VERBS["admin"])["color"]
         segs.append({
             "left": round(s / span * 100, 3),
             "width": max(0.2, round((e - s) / span * 100, 3)),
             "color": color,
-            "title": f"{t['start']}–{t['end']} {t.get('label', '')}",
-            "id": t.get("task_id", ""),
+            "title": f"{task['start']}–{task['end']} {task.get('label', '')}",
+            "id": task.get("task_id", ""),
         })
     return segs
 
@@ -510,21 +543,21 @@ def reading_view(payload: dict) -> dict:
             if b:
                 highlight_pairs.append((str(b.get("start") or "")[11:16], c))
                 break
-    for t in tasks:
-        hits = [c for hm, c in highlight_pairs if t["start"] <= hm <= t["end"]]
-        t["outcome"] = hits[0]["what"] if hits else ""
-        t["outcome_status"] = hits[0]["status_label"] if hits else ""
-        t["block_ids"] = [bid for c in hits for bid in c["block_ids"]][:8]
+    for task in tasks:
+        hits = [c for hm, c in highlight_pairs if task["start"] <= hm <= task["end"]]
+        task["outcome"] = hits[0]["what"] if hits else ""
+        task["outcome_status"] = hits[0]["status_label"] if hits else ""
+        task["block_ids"] = [bid for c in hits for bid in c["block_ids"]][:8]
 
     # "明天"里已经变成待办的那几条不再重复列一遍
-    todo_items = [t["item"] for t in todos]
+    todo_items = [x["item"] for x in todos]
 
     def _dup(text: str) -> bool:
         text = str(text or "").strip()
         return any(text and (text in x or x in text) for x in todo_items)
 
-    tomorrow_extra = [t for t in (rep.get("tomorrow") or [])
-                      if isinstance(t, dict) and t.get("item") and not _dup(t["item"])]
+    tomorrow_extra = [x for x in (rep.get("tomorrow") or [])
+                      if isinstance(x, dict) and x.get("item") and not _dup(x["item"])]
 
     return {
         "tasks": tasks,
@@ -558,10 +591,21 @@ def coverage_state(payload: dict) -> tuple[bool, str]:
     settled = len(gen) >= 10 and len(day) == 10 and gen[:10] > day
     until = cov.get("until") or ""
     if cov.get("complete"):
-        return True, "完整一天"
+        return True, t("Full day")
     if settled:
-        return True, f"已收尾 · 覆盖到 {until}"
-    return False, f"截至 {until} · 当天还没结束"
+        return True, t("Closed · covered until {time}", time=until)
+    return False, t("Up to {time} · the day is not over", time=until)
+
+
+def _relabel_breakdown(payload: dict) -> None:
+    """report.py 按 CATEGORY_LABEL 把分类名写成了中文；页面按当前语言重标。"""
+    by_label = {str(v): k for k, v in CAT_LABEL.items()}
+    for it in (payload.get("report") or {}).get("time_breakdown") or []:
+        if not isinstance(it, dict):
+            continue
+        key = by_label.get(str(it.get("category") or ""))
+        if key:
+            it["category"] = cat_name(key)
 
 
 def render_day(payload: dict) -> Path:
@@ -584,7 +628,8 @@ def render_day(payload: dict) -> Path:
                 b["_full"] = b["_thumb"]
             break
         b["_color"] = CAT_COLOR.get(b.get("category", "other"), CAT_COLOR["other"])
-        b["_cat_label"] = CAT_LABEL.get(b.get("category", "other"), "其他")
+        b["_cat_label"] = cat_name(b.get("category", "other"))
+    _relabel_breakdown(payload)
     refs = _ref_map(payload)
     behaviors = ((payload.get("report") or {}).get("behaviors")) or []
 
@@ -597,7 +642,7 @@ def render_day(payload: dict) -> Path:
     html = tpl.render(
         d=payload,
         day=day,
-        weekday=payload.get("weekday", ""),
+        weekday=weekday_label(payload.get("weekday", ""), day),
         blocks=blocks,
         refs=refs,
         refs_list=payload.get("refs", []),
@@ -606,10 +651,14 @@ def render_day(payload: dict) -> Path:
         behaviors=behaviors,
         rv=rv,
         rhythm=(payload.get("stats") or {}).get("rhythm") or {},
-        verbs=behavior_mod.VERBS,
+        verbs={k: {"label": t(v["label"]), "color": v["color"]}
+               for k, v in behavior_mod.VERBS.items()},
         ticks=_strip_ticks(payload),
-        cat_label=CAT_LABEL,
+        cat_label={k: cat_name(k) for k in CAT_LABEL},
         extra_head="../assets/board.css",
+        t=t,
+        tn=tn,
+        lang=i18n.current(),
     )
     out = paths.web_day(day)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -631,7 +680,7 @@ def render_index(cfg) -> Path:
         rep = data.get("report") or {}
         reports.append({
             "day": data.get("day", p.stem),
-            "weekday": data.get("weekday", ""),
+            "weekday": weekday_label(data.get("weekday", ""), data.get("day", p.stem)),
             "headline": rep.get("headline", ""),
             "status": data.get("status", ""),
             "minutes": (data.get("stats") or {}).get("active_minutes", 0),
@@ -694,6 +743,9 @@ def render_index(cfg) -> Path:
         model=cfg.get("llm.model", ""),
         now=timeutil.now(),
         extra_head="assets/board.css",
+        t=t,
+        tn=tn,
+        lang=i18n.current(),
     )
     out = paths.WEB / "index.html"
     out.parent.mkdir(parents=True, exist_ok=True)

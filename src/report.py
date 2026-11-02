@@ -1,6 +1,8 @@
 """日报编排：取数 -> 分块 -> 引用解析 -> 压缩 -> 模型 -> 校验 -> 落盘 -> 出页。"""
 from __future__ import annotations
 
+from i18n import join_list, t, tn
+
 import hashlib
 import json
 import os
@@ -114,17 +116,17 @@ def _coverage(day: str, now, cutoff_hour: int) -> dict:
     # 次日凌晨才出的终版，覆盖到 03:01 属于正常收尾：页面不能再写"当日未结束"
     settled = complete or now.date() > timeutil.parse_day(day).date()
     if complete:
-        window_label = f"{ws:%m-%d %H:%M} – 次日 {we:%H:%M}"
-        until_label = "完整一天"
-        note = "完整一天"
+        window_label = t("{start} – next day {end}", start=f"{ws:%m-%d %H:%M}", end=f"{we:%H:%M}")
+        until_label = t("Full day")
+        note = t("Full day")
     elif settled:
         window_label = f"{ws:%H:%M} – {until:%H:%M}"
         until_label = until.strftime("%H:%M")
-        note = f"已收尾 · 覆盖到 {until:%H:%M}"
+        note = t("Closed · covered until {time}", time=until.strftime("%H:%M"))
     else:
         window_label = f"{ws:%H:%M} – {until:%H:%M}"
         until_label = until.strftime("%H:%M")
-        note = f"截至 {until:%H:%M} · 当天还没结束"
+        note = t("Up to {time} · the day is not over", time=until.strftime("%H:%M"))
     return {
         "start": ws.strftime("%H:%M"),
         "end": we.strftime("%H:%M"),
@@ -149,34 +151,43 @@ def _degraded_report(blocks, stats, reason_text: str, sessions=None) -> dict:
         tl.append({
             "start": b.start.strftime("%H:%M"),
             "end": b.end.strftime("%H:%M"),
-            "title": b.title or b.app or "(无标题)",
+            "title": b.title or b.app or t("(untitled)"),
             "app": b.app,
             "category": b.category,
             "block_ids": [b.id],
         })
     behaviors = behavior_mod.merge([], sessions or [])
     cats = stats.get("by_category", {})
-    cat_text = "、".join(f"{blocks_mod.CATEGORY_LABEL.get(k, k)} {v:.0f} 分钟" for k, v in cats.items())
-    top_apps = "、".join(f"{k} {v:.0f} 分" for k, v in list(stats.get("by_app", {}).items())[:5])
+    cat_text = join_list(f"{render.cat_name(k)} {v:.0f}{t(' min')}" for k, v in cats.items())
+    top_apps = join_list(f"{k} {v:.0f}{t(' min')}" for k, v in list(stats.get("by_app", {}).items())[:5])
     r = stats.get("rhythm") or {}
 
     # 没模型时也要有"读得下去"的正文：按行为段铺一遍，不评价只陈述
     story: list[str] = []
     for it in behaviors[:12]:
-        tail = f"　{it['detail']}" if it.get("detail") else ""
-        story.append(f"**{it['start']}–{it['end']}**　{it['label']}（{it['minutes']} 分钟）{tail}")
-    summary = (
-        f"{reason_text}\n\n"
-        f"今天共记录到 {stats['block_count']} 个活动块，有效活动 {stats['active_minutes']:.0f} 分钟"
-        f"（{stats['first'] or '-'} 至 {stats['last'] or '-'}）。"
-        + (f"时间主要花在：{cat_text}。" if cat_text else "")
-        + (f"最长连续专注 {r['longest_focus_min']} 分钟（{r.get('longest_focus_at', '')}）；"
-           f"碎片时间占 {r.get('fragmented_ratio', 0) * 100:.0f}%。" if r.get("longest_focus_min") else "")
-        + "\n\n" + "\n\n".join(story)
-    )
+        tail = t(" {detail}", detail=it["detail"]) if it.get("detail") else ""
+        story.append(t("**{start}–{end}** {label} ({minutes} min){tail}",
+                       start=it["start"], end=it["end"], label=it["label"],
+                       minutes=it["minutes"], tail=tail))
+    summary = reason_text + "\n\n" + tn(
+        stats["block_count"],
+        "Recorded {n} activity block today, {minutes} active minutes ({first} to {last}).",
+        "Recorded {n} activity blocks today, {minutes} active minutes ({first} to {last}).",
+        minutes=f"{stats['active_minutes']:.0f}",
+        first=stats["first"] or "-", last=stats["last"] or "-")
+    if cat_text:
+        summary += t(" Most of the time went to: {cats}.", cats=cat_text)
+    if r.get("longest_focus_min"):
+        summary += t(" Longest focus {n} min ({at}), {pct}% of the time fragmented.",
+                     n=r["longest_focus_min"], at=r.get("longest_focus_at", ""),
+                     pct=f"{r.get('fragmented_ratio', 0) * 100:.0f}")
+    summary += "\n\n" + "\n\n".join(story)
     return {
         "schema_version": 1,
-        "headline": f"共 {stats['block_count']} 个活动块，有效活动 {stats['active_minutes'] / 60:.1f} 小时",
+        "headline": tn(stats["block_count"],
+                       "{n} activity block, {hours} h of active time",
+                       "{n} activity blocks, {hours} h of active time",
+                       hours=f"{stats['active_minutes'] / 60:.1f}"),
         "opening_md": "",
         "summary_md": summary,
         "behaviors": behaviors,
@@ -192,7 +203,8 @@ def _degraded_report(blocks, stats, reason_text: str, sessions=None) -> dict:
         "learnings": [],
         "tomorrow": [],
         "time_breakdown": [
-            {"category": blocks_mod.CATEGORY_LABEL.get(k, k), "minutes": int(v), "note": "由采集数据直接统计"}
+            {"category": render.cat_name(k), "minutes": int(v),
+             "note": t("Counted directly from captured data")}
             for k, v in cats.items()
         ],
         "apps": [{"app": k, "minutes": int(v), "role": ""} for k, v in list(stats.get("by_app", {}).items())[:8]],
@@ -213,7 +225,8 @@ def generate(day: str, cfg, log, reason: str = "manual", force: bool = False,
     with SingleInstance("WhatIDid.Report", wait=LOCK_WAIT_SEC) as lock:
         if not lock.acquired:
             if log:
-                log.info("已有报表进程在跑，等了 %.0fs 仍未释放，本次跳过", LOCK_WAIT_SEC)
+                log.info("Another report process is running; still locked after %.0fs, skipping",
+                         LOCK_WAIT_SEC)
             return {"status": "busy", "day": day}
         return _generate_locked(day, cfg, log, reason, force, open_browser, approved)
 
@@ -237,7 +250,8 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
                 and state.get("input_hash") == input_hash(day)):
             if state.get("status") in ("ok", "empty") or not upgrade_due(state, now, cfg):
                 if log:
-                    log.info("%s 已生成过（%s 第 %s 版，覆盖到 %s，输入无变化），跳过",
+                    log.info("%s already generated (%s revision %s, covered until %s, "
+                             "input unchanged); skipping",
                              day, state.get("status"), state.get("revision"),
                              state.get("coverage_until", ""))
                 return {"status": "skipped", "day": day, "revision": state.get("revision"),
@@ -248,7 +262,7 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
     if not events:
         # 连一条观测都没有：说明那天根本没开机或采集没运行，不该产出空日报
         if log:
-            log.info("%s 没有任何采集数据，跳过", day)
+            log.info("%s has no capture data; skipping", day)
         return {"status": "nodata", "day": day, "reason": "no_events"}
     all_blocks = blocks_mod.build_blocks(events, ocr_map, cfg)
     stats = blocks_mod.summarize(all_blocks)
@@ -273,16 +287,18 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
     if stats["active_minutes"] < min_active:
         status = "empty"
         report_data = validate.empty_report(
-            f"这一天有效活动只有 {stats['active_minutes']:.0f} 分钟，不足以生成日报。"
-            f"可能是电脑未开机、采集未运行，或当天基本没在电脑上工作。"
+            t("Only {minutes} active minutes on this day, not enough for a report. "
+              "The computer may have been off, capture may not have been running, "
+              "or there was barely any work on it.",
+              minutes=f"{stats['active_minutes']:.0f}")
         )
         resolved_refs: list[dict] = []
         if log:
-            log.info("%s 活跃仅 %.0f 分钟，输出空日报", day, stats["active_minutes"])
+            log.info("%s active for only %.0f min; writing an empty report", day, stats["active_minutes"])
     else:
         resolved_refs = refs.resolve_for_report(cfg, all_blocks, log)
         if log:
-            log.info("%s：%d 个活动块 / %d 个行为段，解析到 %d 条文档引用",
+            log.info("%s: %d blocks / %d behavior segments, resolved %d document references",
                      day, len(all_blocks), len(sessions), len(resolved_refs))
 
         payload, dmeta = digest.build_payload(
@@ -296,9 +312,11 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
         client = llm.LLMClient(cfg, log)
         if not client.configured():
             status = "degraded"
-            degraded_reason = ("隐私设置已禁止模型外发，输出本地时间线（未发送任何模型请求）"
+            degraded_reason = (t("Privacy settings block model requests; showing the local timeline "
+                                 "(no request was sent)")
                                if not cfg.get("privacy.allow_llm", True) else
-                               "未配置 API Key，输出的是纯时间线版本（不调用模型）")
+                               t("No API key configured; showing the plain timeline version "
+                                 "(model not called)"))
             report_data = _degraded_report(all_blocks, stats, degraded_reason, sessions)
             if log:
                 log.warning(degraded_reason)
@@ -322,7 +340,7 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
                     "payload": payload,
                 })
             if log:
-                log.info("%s 进入发送前审核（review_mode），未调用模型", day)
+                log.info("%s entered pre-send review (review_mode); model not called", day)
             return {"status": "awaiting_review", "day": day,
                     "preview_path": str(review_path(day)), "cached": fresh}
         else:
@@ -338,7 +356,7 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
                     payload = prev_review["payload"]
                     payload_chars = len(payload)
                     if log:
-                        log.info("%s 使用已确认的待发内容（%d 字）", day, payload_chars)
+                        log.info("%s using the confirmed pending content (%d chars)", day, payload_chars)
 
             block_ids = {b.id for b in all_blocks}
             ref_ids = {r["ref_id"] for r in resolved_refs}
@@ -366,12 +384,13 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
                         issues.extend(vissues)
                     except llm.LLMError as exc2:
                         status = "degraded"
-                        degraded_reason = f"模型两次输出都无法解析，已降级为时间线版：{exc2}"
+                        degraded_reason = t("Model output was unparseable twice; degraded to the "
+                                            "timeline version: {e}", e=exc2)
                         report_data = _degraded_report(all_blocks, stats, degraded_reason, sessions)
                         issues.append(str(exc2))
                 else:
                     status = "degraded"
-                    degraded_reason = f"模型调用失败（{exc.kind}）：{exc}"
+                    degraded_reason = t("Model call failed ({kind}): {e}", kind=exc.kind, e=exc)
                     report_data = _degraded_report(all_blocks, stats, degraded_reason, sessions)
                     issues.append(str(exc))
                 if log:
@@ -380,7 +399,9 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
     latest_cfg = privacy.current_config(cfg)
     privacy.require_valid(latest_cfg)
     if latest_cfg.get("privacy", {}) != cfg.get("privacy", {}):
-        raise privacy.PrivacyError("生成期间隐私设置已变化，未覆盖旧报告，请重新生成")
+        raise privacy.PrivacyError(
+            t("Privacy settings changed during generation; the old report was left untouched. "
+              "Please regenerate."))
     report_data = privacy.redact_value(report_data, cfg)
     resolved_refs = privacy.redact_value(resolved_refs, cfg)
 
@@ -483,7 +504,7 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
     discard_review(day)
 
     if log:
-        log.info("%s 日报完成：status=%s rev=%d 块=%d 用时=%dms 输出=%s",
+        log.info("%s report done: status=%s rev=%d blocks=%d elapsed=%dms output=%s",
                  day, status, revision, len(all_blocks), elapsed, html_path)
 
     if open_browser and cfg.get("report.open_browser", True) and os.environ.get("WID_NO_BROWSER") != "1":
@@ -516,10 +537,11 @@ def _sync_obsidian(cfg, day: str, md_path, log) -> None:
     try:
         target_dir = Path(vault)
         target_dir.mkdir(parents=True, exist_ok=True)
-        dest = target_dir / f"{day} 工作日报.md"
+        # 文件名不跟语言走：否则切一次语言就在 vault 里多出一份同名笔记
+        dest = target_dir / f"{day} daily report.md"
         dest.write_text(md_path.read_text(encoding="utf-8"), encoding="utf-8")
         if log:
-            log.info("已同步到 Obsidian: %s", dest)
+            log.info("Synced to Obsidian: %s", dest)
     except Exception as exc:
         if log:
-            log.warning("同步 Obsidian 失败: %s", exc)
+            log.warning("Failed to sync to Obsidian: %s", exc)

@@ -1,6 +1,8 @@
 """滚动清理原始数据与报告 OCR 摘录；不删除叙述、外部文件或同步副本。"""
 from __future__ import annotations
 
+from i18n import t
+
 import json
 import shutil
 import stat
@@ -23,7 +25,8 @@ def _dir_size(p: Path) -> int:
         f = pending.pop()
         st = f.lstat()
         if stat.S_ISLNK(st.st_mode) or getattr(st, "st_file_attributes", 0) & 0x400:
-            raise OSError("数据目录含链接或联接点，已拒绝自动清理")
+            raise OSError(t("The data directory contains a link or junction; "
+                            "automatic cleanup was refused"))
         if stat.S_ISDIR(st.st_mode):
             pending.extend(f.iterdir())
         elif stat.S_ISREG(st.st_mode):
@@ -50,7 +53,8 @@ def clean(cfg, log=None, dry_run: bool = False) -> dict:
     with SingleInstance("WhatIDid.Report") as lock:
         if not lock.acquired:
             return {"status": "busy", "dry_run": dry_run,
-                    "reason": "日报生成或另一清理正在运行，本次未修改文件"}
+                    "reason": t("Report generation or another cleanup is running; "
+                                "no files were changed this time")}
         return _clean_locked(cfg, log, dry_run)
 
 
@@ -76,7 +80,9 @@ def _clean_locked(cfg, log, dry_run: bool) -> dict:
             if not dry_run:
                 shutil.rmtree(p)
         except OSError as exc:
-            summary["errors"].append(f"{p.name}: {type(exc).__name__}，目录未完整清理")
+            summary["errors"].append(
+                t("{name}: {err}, the directory was not fully cleaned",
+                  name=p.name, err=type(exc).__name__))
             return False
         removed.add(p)
         summary["freed_mb"] += size / 1024 ** 2
@@ -134,7 +140,8 @@ def _clean_locked(cfg, log, dry_run: bool) -> dict:
                         f.unlink(missing_ok=True)
                     summary["tmp_removed"] += 1
             except OSError as exc:
-                summary["errors"].append(f"OCR 临时文件清理失败（{type(exc).__name__}）")
+                summary["errors"].append(
+                    t("Failed to clean an OCR temp file ({err})", err=type(exc).__name__))
     for f in paths.STATE.glob("*.tmp"):
         try:
             if time.time() - f.stat().st_mtime > 3600:
@@ -149,9 +156,11 @@ def _clean_locked(cfg, log, dry_run: bool) -> dict:
     if summary["errors"]:
         summary["status"] = "partial"
     if log:
-        log.info("%s：截图 %d 个，释放 %.1f MB，数据 %.2f GB，清除 %d 份报告的 OCR 摘录，错误 %d 项",
-                 "清理预览" if dry_run else "清理结束", summary["removed_shots"], summary["freed_mb"],
-                 summary["total_gb"], len(summary["excerpt_reports"]), len(summary["errors"]))
+        log.info("%s: %d shots, %.1f MB freed, %.2f GB total, OCR excerpts cleared from %d "
+                 "reports, %d errors",
+                 "cleanup preview" if dry_run else "cleanup done", summary["removed_shots"],
+                 summary["freed_mb"], summary["total_gb"], len(summary["excerpt_reports"]),
+                 len(summary["errors"]))
     return summary
 
 
@@ -162,10 +171,10 @@ def _prune_report_excerpts(cfg, summary: dict, touched: set[str], dry_run: bool,
             if keep_report_excerpts(name, cfg):
                 continue
             if src.is_symlink() or getattr(src.lstat(), "st_file_attributes", 0) & 0x400:
-                raise ValueError("报告是链接，拒绝改写")
+                raise ValueError(t("The report is a link; refusing to rewrite it"))
             payload = json.loads(src.read_text(encoding="utf-8"))
             if not isinstance(payload, dict) or payload.get("day") != name:
-                raise ValueError("报告日期与文件名不符")
+                raise ValueError(t("Report date does not match the file name"))
             changed = 0
             for block in payload.get("blocks", []):
                 if block.get("text"):
@@ -186,9 +195,11 @@ def _prune_report_excerpts(cfg, summary: dict, touched: set[str], dry_run: bool,
             summary["rerendered"] += 1
             touched.discard(name)
         except Exception as exc:
-            summary["errors"].append(f"{name}: 摘录清理/页面刷新失败（{type(exc).__name__}），需重试")
+            summary["errors"].append(
+                t("{name}: excerpt cleanup / page refresh failed ({err}); retry needed",
+                  name=name, err=type(exc).__name__))
             if log:
-                log.warning("%s 摘录清理未完整完成（%s）", name, type(exc).__name__)
+                log.warning("%s excerpt cleanup did not finish (%s)", name, type(exc).__name__)
 
 
 def _rerender(day_names, log=None, errors=None) -> int:
@@ -203,16 +214,17 @@ def _rerender(day_names, log=None, errors=None) -> int:
 
             payload = json.loads(src.read_text(encoding="utf-8"))
             if payload.get("day") != name:
-                raise ValueError("报告日期与文件名不符")
+                raise ValueError(t("Report date does not match the file name"))
             render.render_day(payload)
             done += 1
         except Exception as exc:
             if errors is not None:
-                errors.append(f"{name}: 页面刷新失败（{type(exc).__name__}）")
+                errors.append(t("{name}: page refresh failed ({err})",
+                                name=name, err=type(exc).__name__))
             if log:
-                log.warning("重渲 %s 失败（%s）", name, type(exc).__name__)
+                log.warning("Failed to re-render %s (%s)", name, type(exc).__name__)
     if done and log:
-        log.info("已重渲 %d 天日报（截图已过期，缩略图位置留空）", done)
+        log.info("Re-rendered %d daily reports (shots expired, thumbnails left blank)", done)
     return done
 
 

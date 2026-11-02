@@ -1,6 +1,8 @@
 """统一隐私边界：采集许可、匿名事件、本地 OCR 地址和文本脱敏。"""
 from __future__ import annotations
 
+from i18n import t
+
 import ipaddress
 import json
 import re
@@ -43,19 +45,21 @@ def require_valid(cfg) -> None:
     for key in ("blocked_apps", "skip_ocr_apps", "blocked_title_patterns", "redact_patterns"):
         values = cfg.get(f"privacy.{key}", [])
         if not isinstance(values, list) or any(not isinstance(v, str) or not v.strip() for v in values):
-            raise PrivacyError(f"privacy.{key} 必须是非空字符串列表（无规则时用 []）")
+            raise PrivacyError(t("privacy.{key} must be a list of non-empty strings "
+                                 "(use [] when there are no rules)", key=key))
         if key.endswith("patterns"):
             for i, pattern in enumerate(values, 1):
                 try:
                     re.compile(pattern)
                 except re.error as exc:
                     # 不回显正则或 YAML 原文，配置里可能含敏感信息。
-                    raise PrivacyError(f"privacy.{key} 第 {i} 条正则无效") from exc
+                    raise PrivacyError(t("privacy.{key} entry {i} is not a valid regex",
+                                         key=key, i=i)) from exc
     for key, default in (("store_screenshots", True), ("allow_llm", True)):
         if not isinstance(cfg.get(f"privacy.{key}", default), bool):
-            raise PrivacyError(f"privacy.{key} 必须是 true 或 false")
+            raise PrivacyError(t("privacy.{key} must be true or false", key=key))
     if cfg.get("privacy.capture_scope", "active_window") not in ("active_window", "all_screens"):
-        raise PrivacyError("privacy.capture_scope 只能是 active_window 或 all_screens")
+        raise PrivacyError(t("privacy.capture_scope must be active_window or all_screens"))
 
 
 def require_local_ocr_url(url: str) -> str:
@@ -77,7 +81,8 @@ def require_local_ocr_url(url: str) -> str:
             port = f":{parsed.port}" if parsed.port is not None else ""
             url = parsed._replace(netloc=f"127.0.0.1{port}").geturl()
     except (TypeError, ValueError) as exc:
-        raise PrivacyError("OCR HTTP 地址必须是无凭据、无查询参数的本机回环 http(s) 地址") from exc
+        raise PrivacyError(t("The OCR HTTP URL must be a loopback http(s) address with no "
+                             "credentials and no query parameters")) from exc
     return url
 
 
@@ -170,7 +175,7 @@ def is_blocked_title(title: str, cfg) -> bool:
             if re.search(pat, title):
                 return True
         except re.error as exc:
-            raise PrivacyError("标题屏蔽正则无效，已停止内容处理") from exc
+            raise PrivacyError(t("A title-blocking regex is invalid; content processing stopped")) from exc
     return False
 
 
@@ -189,7 +194,7 @@ def redact(text: str, cfg, extra_secrets: tuple[str, ...] = ()) -> str:
         try:
             out = re.sub(pat, "[REDACTED]", out)
         except re.error as exc:
-            raise PrivacyError("脱敏正则无效，已停止内容处理") from exc
+            raise PrivacyError(t("A redaction regex is invalid; content processing stopped")) from exc
     return out
 
 

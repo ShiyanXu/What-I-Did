@@ -33,7 +33,22 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+import i18n                         # noqa: E402
+from i18n import join_list, t, tn   # noqa: E402  （要先把 src 加进 sys.path）
+
 OK, WARN, FAIL = "[ OK ]", "[WARN]", "[FAIL]"
+
+
+def _apply_locale() -> None:
+    """CLI 的输出语言跟配置走；读不到配置就用默认（英文）。"""
+    code = i18n.DEFAULT_LOCALE
+    try:
+        import config as cfgmod
+
+        code = cfgmod.load().get("ui.language", i18n.DEFAULT_LOCALE)
+    except Exception:
+        pass
+    i18n.set_locale(code)
 
 
 def _pad(text: str, width: int) -> str:
@@ -55,12 +70,14 @@ def cmd_doctor(args) -> int:
         print(json.dumps([{"level": l.strip("[] "), "name": n, "detail": d} for l, n, d in rows],
                          ensure_ascii=False, indent=2))
     else:
-        print(f"\nWhat-I-Did 环境自检  {timeutil.now():%Y-%m-%d %H:%M:%S}\n" + "-" * 78)
+        print(t("\nWhat-I-Did environment checks  {ts}\n",
+  ts=timeutil.now().strftime("%Y-%m-%d %H:%M:%S")) + "-" * 78)
         for level, name, detail in rows:
             print(f"{level} {_pad(name, 12)} {detail}")
         print("-" * 78)
         s = doctor.summary(rows)
-        print(f"结果：{s['ok']} 正常 / {s['warn']} 提醒 / {s['fail']} 失败")
+        print(t("Result: {ok} ok / {warn} warnings / {fail} failed",
+  ok=s["ok"], warn=s["warn"], fail=s["fail"]))
 
     if args.full:
         return cmd_ocr_test(argparse.Namespace(screen=True, image=None, raw=False))
@@ -80,18 +97,20 @@ def cmd_ocr_test(args) -> int:
     if args.image:
         image_path = Path(args.image)
         if not image_path.exists():
-            print(f"{FAIL} 图片不存在: {image_path}")
+            print(t("{tag} Image not found: {p}", tag=FAIL, p=image_path))
             return 1
     elif not args.screen:
-        print("请加 --screen 或 --image <路径>")
+        print(t("Pass --screen or --image <path>"))
         return 2
 
     info = ocr.probe(cfg)
-    print(f"引擎配置={info['mode']}  Umi存在={info['umi_exe_exists']}  "
-          f"HTTP:{info['umi_port']} 在听={info['umi_open']}")
+    print(t("engine mode={mode}  umi={umi}  http:{port} listening={listen}",
+  mode=info["mode"], umi=info["umi_exe_exists"],
+  port=info["umi_port"], listen=info["umi_open"]))
     res = (ocr.recognize_once(cfg, image_path, timeout=float(cfg.get("ocr.timeout_sec", 90)))
            if image_path is not None else ocr.recognize_screen(cfg))
-    print(f"引擎={res['engine'] or '-'}  状态={res['status']}  耗时={res['ms']}ms")
+    print(t("engine={engine}  status={status}  {ms}ms",
+  engine=res["engine"] or "-", status=res["status"], ms=res["ms"]))
     if res["error"]:
         print(f"{FAIL} {res['error']}")
     text = res["text"] or ""
@@ -101,8 +120,8 @@ def cmd_ocr_test(args) -> int:
     else:
         preview = text[:600].replace("\n", " / ")
         print("-" * 60)
-        print(f"字符数={len(text)}")
-        print(f"预览：{preview or '(空)'}")
+        print(t("chars={n}", n=len(text)))
+        print(t("Preview: {p}", p=preview or t("(empty)")))
     return 0 if res["status"] == "ok" else 1
 
 
@@ -123,7 +142,7 @@ def cmd_collect(args) -> int:
         print(json.dumps(ev, ensure_ascii=False, indent=2))
         col.shutdown()
         return 0
-    log.info("前台采集启动（Ctrl+C 停止）")
+    log.info(t("Foreground capture started (Ctrl+C to stop)"))
     return _run_collector(cfg, log, duration=args.duration)
 
 
@@ -135,10 +154,10 @@ def _run_collector(cfg, log, duration: float = 0) -> int:
     try:
         col.run(duration=duration)
     except KeyboardInterrupt:
-        log.info("收到中断")
+        log.info(t("Interrupted"))
     finally:
         col.shutdown()
-    log.info("采集结束，运行 %.0fs", time_now() - started)
+    log.info(t("Capture finished after %.0fs"), time_now() - started)
     return 0
 
 
@@ -177,7 +196,8 @@ def cmd_report(args) -> int:
                               force=args.force, open_browser=(not args.no_open))
     print(json.dumps(res, ensure_ascii=False, indent=2))
     if res.get("status") == "awaiting_review":
-        print(f"已生成待审内容，确认后才外发：{Path(sys.argv[0]).name} review show --date {day}")
+        print(t("Queued for review; nothing is sent until you confirm: {exe} review show --date {day}",
+  exe=Path(sys.argv[0]).name, day=day))
     return 0 if res.get("status") in ("ok", "skipped", "degraded", "empty", "busy",
                                       "nodata", "awaiting_review") else 1
 
@@ -279,10 +299,10 @@ def cmd_open(args) -> int:
     if not target.exists():
         target = paths.WEB / "index.html"
     if not target.exists():
-        print("还没有生成看板，先运行：python wid.py report")
+        print(t("No dashboard yet. Run: python wid.py report"))
         return 1
     os.startfile(str(target))  # noqa: S606
-    print(f"已打开 {target}")
+    print(t("Opened {target}", target=target))
     return 0
 
 
@@ -321,16 +341,17 @@ def cmd_forget(args) -> int:
     import logging_setup
 
     if bool(args.minutes) == bool(args.day):
-        print("请二选一：--minutes N（最近 N 分钟）或 --day YYYY-MM-DD（整天）")
+        print(t("Pick one: --minutes N (last N minutes) or --day YYYY-MM-DD (whole day)"))
         return 2
-    scope = f"最近 {args.minutes} 分钟" if args.minutes else f"{args.day} 一整天"
+    scope = t("the last {n} minutes", n=args.minutes) if args.minutes else t("the whole day {day}", day=args.day)
     if not args.yes:
-        ans = _confirm(f"将永久删除{scope}的事件、截图、OCR 与派生日报，无法恢复。继续？[y/N] ")
+        ans = _confirm(t("This permanently deletes events, screenshots, OCR and derived reports for "
+  "{scope}. Continue? [y/N] ", scope=scope))
         if ans is None:
-            print(f"非交互场景请加 --yes 明确确认（计划删除：{scope}）")
+            print(t("Non-interactive: add --yes to confirm (planned deletion: {scope})", scope=scope))
             return 2
         if not ans:
-            print("已取消，什么都没删")
+            print(t("Cancelled; nothing was deleted"))
             return 2
 
     cfg = cfgmod.load()
@@ -342,7 +363,7 @@ def cmd_forget(args) -> int:
         print(f"{FAIL} {exc}")
         return 1
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-    print("已删除。看板索引已刷新；已经发给模型服务的内容无法撤回。")
+    print(t("Deleted. The dashboard index is refreshed; content already sent to the model service cannot be recalled."))
     return 0
 
 
@@ -364,27 +385,28 @@ def cmd_manual(args) -> int:
     try:
         if action == "add":
             if not (args.start and args.end and args.label):
-                print("add 需要 --start HH:MM --end HH:MM --label 文字")
+                print(t("add needs --start HH:MM --end HH:MM --label TEXT"))
                 return 2
             manual_mod.add_offline(day, args.start, args.end, args.label, args.note or "")
         elif action == "override":
             if not args.seg:
-                print("override 需要 --seg seg-03")
+                print(t("override needs --seg seg-03"))
                 return 2
             manual_mod.set_override(day, args.seg, args.verb or "", args.label or "", args.note or "")
         elif action == "notes":
             if args.text is None:
-                print("notes 需要 --text")
+                print(t("notes needs --text"))
                 return 2
             manual_mod.set_notes(day, args.text)
         else:
-            print("未知操作，可用：add / override / notes / show")
+            print(t("Unknown action; use add / override / notes / show"))
             return 2
     except ValueError as exc:
         print(f"{FAIL} {exc}")
         return 1
-    print(f"已写入 {manual_mod.path(day)}")
-    print(f"下次生成日报会自动套用：{Path(sys.argv[0]).name} report --date {day} --force")
+    print(t("Written to {path}", path=manual_mod.path(day)))
+    print(t("The next report picks it up automatically: {exe} report --date {day} --force",
+  exe=Path(sys.argv[0]).name, day=day))
     return 0
 
 
@@ -403,32 +425,33 @@ def cmd_review(args) -> int:
 
     if args.action == "show":
         if not path.exists():
-            print(f"{day} 没有待审内容。先运行：{Path(sys.argv[0]).name} report --date {day}")
+            print(t("No queued content for {day}. Run: {exe} report --date {day}",
+  day=day, exe=Path(sys.argv[0]).name))
             return 1
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"{FAIL} 待审文件读不出来：{exc}")
+            print(t("{tag} Cannot read the queued file: {e}", tag=FAIL, e=exc))
             return 1
         payload = str(data.get("payload") or "")
-        print(f"日期   : {data.get('day', day)}")
-        print(f"生成于 : {data.get('generated_at', '')}")
-        print(f"覆盖   : {data.get('coverage', '')}")
-        print(f"目标   : {data.get('model', '')} @ {data.get('base_url', '')}")
-        print(f"字数   : {data.get('payload_chars', len(payload))}")
-        print(f"预览文件: {path}")
+        print(t("Date     : {v}", v=data.get("day", day)))
+        print(t("Generated: {v}", v=data.get("generated_at", "")))
+        print(t("Coverage : {v}", v=data.get("coverage", "")))
+        print(t("Target   : {v} @ {u}", v=data.get("model", ""), u=data.get("base_url", "")))
+        print(t("Chars    : {v}", v=data.get("payload_chars", len(payload))))
+        print(t("Preview  : {v}", v=path))
         print("-" * 70)
         limit = max(200, int(args.chars))
-        print(payload[:limit] + ("\n…（已截断，用 --chars 调整或直接打开预览文件）"
+        print(payload[:limit] + (t("\n…(truncated; adjust with --chars or open the preview file)")
                                  if len(payload) > limit else ""))
         return 0
 
     if args.action == "approve":
         if not path.exists():
-            print(f"{day} 没有待审内容，先运行 report 生成预览")
+            print(t("No queued content for {day}; run report first to build a preview", day=day))
             return 1
         if not cfg.get("report.review_mode", False):
-            print("当前未开启 review_mode；确认外发仍会正常生成日报")
+            print(t("review_mode is off; approving still generates the report normally"))
         log = logging_setup.setup("review", console=True)
         res = report_mod.generate(day, cfg, log, reason="review", force=True,
                                   open_browser=False, approved=True)
@@ -437,10 +460,10 @@ def cmd_review(args) -> int:
 
     if args.action == "discard":
         report_mod.discard_review(day)
-        print(f"已丢弃 {day} 的待审内容（不会外发任何内容）")
+        print(t("Discarded the queued content for {day} (nothing was sent)", day=day))
         return 0
 
-    print("未知操作，可用：show / approve / discard")
+    print(t("Unknown action; use show / approve / discard"))
     return 2
 
 
@@ -481,11 +504,12 @@ def cmd_weekly(args) -> int:
     except ValueError as exc:
         print(f"{FAIL} {exc}")
         return 1
-    print(f"{data['start']} – {data['end']}：有日报 {data['counted_days']} 天，"
-          f"有效活动 {data['total_minutes']:.0f} 分钟")
+    print(t("{start} - {end}: {days} days with a report, {minutes:.0f} minutes of activity",
+  start=data["start"], end=data["end"], days=data["counted_days"],
+  minutes=data["total_minutes"]))
     if data["missing"]:
-        print(f"缺报：{'、'.join(data['missing'])}")
-    print(f"已写入 {data['path']}")
+        print(t("Missing: {items}", items=join_list(data["missing"])))
+    print(t("Written to {path}", path=data["path"]))
     return 0
 
 
@@ -505,8 +529,9 @@ def cmd_export(args) -> int:
     except (ValueError, export_safe.ExportError) as exc:
         print(f"{FAIL} {exc}")
         return 1
-    print(f"已导出 {res['day']} 分享版（{res['chars']} 字）：{res['path']}")
-    print(f"已去除：{'、'.join(res['removed'])}")
+    print(t("Exported the shareable copy of {day} ({chars} chars): {path}",
+  day=res["day"], chars=res["chars"], path=res["path"]))
+    print(t("Removed: {items}", items=join_list(res["removed"])))
     return 0
 
 
@@ -516,14 +541,15 @@ def cmd_init(args) -> int:
 
     paths.ensure_dirs()
     actions = cfgmod.ensure_default()
-    print(f"数据目录: {paths.ROOT}" + ("（便携模式）" if paths.describe()["portable"] else "（用户目录）"))
-    print(f"配置文件: {paths.CONFIG_PATH}" + ("（已生成）" if actions.get("config") else "（已存在）"))
-    print(f"API Key : {paths.API_KEY_PATH}（把 Key 粘进去，或设环境变量 WID_LLM_API_KEY）")
-    print(f"引用绑定: {paths.BINDINGS_PATH}")
-    print("\n下一步：")
-    print("  1) 填 API Key（或 import 环境变量）")
-    print("  2) wid.py doctor            自检")
-    print("  3) wid.py autostart --install   开机自启")
+    print(t("Data dir: {p}", p=paths.ROOT) + (t("(portable)") if paths.describe()["portable"] else t("(user folder)")))
+    print(t("Config  : {p}", p=paths.CONFIG_PATH) + (t("(created)") if actions.get("config") else t("(already there)")))
+    print(t("API Key : {path} (paste the key here, or set WID_LLM_API_KEY)",
+  path=paths.API_KEY_PATH))
+    print(t("Bindings: {path}", path=paths.BINDINGS_PATH))
+    print(t("\nNext steps:"))
+    print(t("  1) Set an API key (or import it from an env var)"))
+    print(t("  2) wid.py doctor            environment checks"))
+    print(t("  3) wid.py autostart --install   start with Windows"))
     return 0
 
 
@@ -544,11 +570,12 @@ def cmd_start(args) -> int:
     if hb and hb.get("pid"):
         age = _pid_age_seconds(int(hb["pid"]))
         if age is not None and age < 120:
-            print(f"已在运行（pid={hb['pid']}，{age} 秒前还有心跳），不必重复启动")
+            print(t("Already running (pid={pid}, heartbeat {age}s ago); no need to start it again",
+  pid=hb["pid"], age=age))
             return 0
 
     pid = autostart.spawn_daemon()
-    print(f"已拉起后台进程 pid={pid}，等待它写出第一份心跳 …")
+    print(t("Background process started, pid={pid}; waiting for its first heartbeat …", pid=pid))
     deadline = time.time() + 12
     while time.time() < deadline:
         time.sleep(1)
@@ -559,13 +586,15 @@ def cmd_start(args) -> int:
         except Exception:
             continue
         if int(cur.get("pid") or 0) == pid:
-            print(f"采集已开始：{cur.get('app') or '-'}，今日截图 {cur.get('shots_today', 0)} 张")
-            print(f"数据目录：{paths.ROOT}")
+            print(t("Capture started: {app}, {n} screenshots today",
+  app=cur.get("app") or "-", n=cur.get("shots_today", 0)))
+            print(t("Data dir: {p}", p=paths.ROOT))
             return 0
-    print("12 秒内没等到心跳，可能启动失败了。排查：")
+    print(t("No heartbeat within 12 seconds; the process may have failed to start. Try:"))
     log = max(paths.LOGS.glob("daemon-*.log"), key=lambda p: p.stat().st_mtime, default=None)
-    print(f"  1) 看日志：{log}")
-    print(f"  2) 前台跑一次看报错：{Path(sys.argv[0]).name} daemon")
+    print(t("  1) Check the log: {log}", log=log))
+    print(t("  2) Run it in the foreground to see the error: {exe} daemon",
+  exe=Path(sys.argv[0]).name))
     return 1
 
 
@@ -629,25 +658,26 @@ def cmd_setup(args) -> int:
 
     me = Path(sys.executable) if paths.is_frozen() else Path(__file__).resolve()
     print("\n" + "=" * 66)
-    print("  What-I-Did  首次运行准备")
+    print(t("  What-I-Did  first-run setup"))
     print("=" * 66)
-    print(f"  程序位置 : {me}")
-    print(f"  数据目录 : {paths.ROOT}")
-    print(f"  配置文件 : {paths.CONFIG_PATH}")
+    print(t("  Program  : {p}", p=me))
+    print(t("  Data dir : {p}", p=paths.ROOT))
+    print(t("  Config   : {p}", p=paths.CONFIG_PATH))
     if actions.get("config"):
-        print("             （已按默认值生成，可直接编辑）")
+        print(t("             (generated with defaults; edit it directly)"))
 
     # --- Key
     key_path = paths.API_KEY_PATH
     print()
     if cfg.has_api_key():
-        print("  [完成] 大模型 Key 已配置")
+        print(t("  [done] Model API key configured"))
     else:
-        print("  [待办] 还没配大模型 Key")
-        print(f"         把 Key 粘进：{key_path}")
-        print("         或设环境变量 WID_LLM_API_KEY（优先级更高）")
-        print(f"         默认模型：{cfg.get('llm.model')} @ {cfg.get('llm.base_url')}")
-        print("         不配也能用，日报会降级为纯时间线版。")
+        print(t("  [todo] No model API key yet"))
+        print(t("         Paste the key into: {p}", p=key_path))
+        print(t("         or set the WID_LLM_API_KEY env var (takes precedence)"))
+        print(t("         Default model: {m} @ {u}",
+  m=cfg.get("llm.model"), u=cfg.get("llm.base_url")))
+        print(t("         It works without one, but reports degrade to a plain timeline."))
 
     # --- 自启
     import autostart
@@ -659,19 +689,19 @@ def cmd_setup(args) -> int:
     name = me.name
     print()
     if st.get("installed"):
-        print(f"  [完成] 开机自启已注册（{st.get('kind')}）")
+        print(t("  [done] Autostart registered ({kind})", kind=st.get("kind")))
     else:
-        ans = _ask("  [询问] 让程序随登录自动启动？[Y/n] ")
+        ans = _ask(t("  [ask] Start automatically at logon? [Y/n] "))
         if ans is True:
             print("         " + autostart.install())
             st = autostart.status()
         elif ans is False:
-            print(f"         已跳过。以后可运行：{name} autostart --install")
+            print(t("         Skipped. Later you can run: {name} autostart --install", name=name))
         else:
-            print("  [待办] 还没注册开机自启")
-            print(f"         运行：{name} autostart --install")
+            print(t("  [todo] Autostart is not registered"))
+            print(t("         Run: {name} autostart --install", name=name))
     if st.get("command"):
-        print(f"         自启命令：{st['command']}")
+        print(t("         Autostart command: {cmd}", cmd=st["command"]))
 
     # --- 立刻开始采集
     print()
@@ -685,19 +715,20 @@ def cmd_setup(args) -> int:
     except Exception:
         running = False
     if running:
-        print("  [完成] 后台采集已在运行")
+        print(t("  [done] Background capture is running"))
     else:
-        ans = _ask("  [询问] 现在就启动后台采集？[Y/n] ")
+        ans = _ask(t("  [ask] Start background capture now? [Y/n] "))
         if ans is True:
             pid = autostart.spawn_daemon()
-            print(f"         已启动 pid={pid}，几秒后可用 status 确认心跳")
+            print(t("         Started pid={pid}; run status in a few seconds to check the heartbeat",
+  pid=pid))
         elif ans is False:
-            print(f"         已跳过。以后可运行：{name} start")
+            print(t("         Skipped. Later you can run: {name} start", name=name))
         else:
-            print(f"  [待办] 启动采集：{name} start")
+            print(t("  [todo] Start capture: {name} start", name=name))
 
     print()
-    print(f"  复核：{name} doctor")
+    print(t("  Verify with: {name} doctor", name=name))
     print("=" * 66 + "\n")
     return 0
 
@@ -725,125 +756,124 @@ def cmd_autostart(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="What-IDid", description="What-I-Did 自动工作记录与日报")
+    p = argparse.ArgumentParser(prog="What-IDid", description=t("What-I-Did automatic work log and daily reports"))
     sub = p.add_subparsers(dest="cmd")
 
-    d = sub.add_parser("doctor", help="环境自检")
+    d = sub.add_parser("doctor", help=t("Environment checks"))
     d.add_argument("--json", action="store_true")
-    d.add_argument("--full", action="store_true", help="附带跑一次真实 OCR")
+    d.add_argument("--full", action="store_true", help=t("Also run a real OCR pass"))
     d.set_defaults(func=cmd_doctor)
 
-    o = sub.add_parser("ocr-test", help="测试本地 OCR")
+    o = sub.add_parser("ocr-test", help=t("Test local OCR"))
     o.add_argument("--screen", action="store_true")
     o.add_argument("--image")
     o.add_argument("--raw", action="store_true")
     o.set_defaults(func=cmd_ocr_test)
 
-    c = sub.add_parser("collect", help="采集（前台调试）")
+    c = sub.add_parser("collect", help=t("Capture (foreground, for debugging)"))
     c.add_argument("--once", action="store_true")
     c.add_argument("--duration", type=float, default=0)
     c.set_defaults(func=cmd_collect)
 
-    dm = sub.add_parser("daemon", help="常驻采集（无窗口）")
+    dm = sub.add_parser("daemon", help=t("Resident capture (no window)"))
     dm.set_defaults(func=cmd_daemon)
 
-    st_ = sub.add_parser("start", help="在后台启动采集")
+    st_ = sub.add_parser("start", help=t("Start capture in the background"))
     st_.set_defaults(func=cmd_start)
 
-    sp = sub.add_parser("stop", help="停止后台采集")
+    sp = sub.add_parser("stop", help=t("Stop background capture"))
     sp.set_defaults(func=cmd_stop)
 
-    r = sub.add_parser("report", help="生成某天日报")
+    r = sub.add_parser("report", help=t("Generate the report for one day"))
     r.add_argument("--date")
     r.add_argument("--reason", default="manual")
     r.add_argument("--force", action="store_true")
     r.add_argument("--no-open", action="store_true")
     r.set_defaults(func=cmd_report)
 
-    t = sub.add_parser("tick", help="计划任务入口")
-    t.set_defaults(func=cmd_tick)
+    tk = sub.add_parser("tick", help=t("Scheduled-task entry point"))
+    tk.set_defaults(func=cmd_tick)
 
-    s = sub.add_parser("status", help="当前状态")
+    s = sub.add_parser("status", help=t("Current status"))
     s.set_defaults(func=cmd_status)
 
-    pa = sub.add_parser("pause", help="暂停采集")
+    pa = sub.add_parser("pause", help=t("Pause capture"))
     pa.add_argument("--minutes", type=int, default=0)
     pa.set_defaults(func=cmd_pause)
 
-    re_ = sub.add_parser("resume", help="恢复采集")
+    re_ = sub.add_parser("resume", help=t("Resume capture"))
     re_.set_defaults(func=cmd_resume)
 
-    op = sub.add_parser("open", help="打开看板")
+    op = sub.add_parser("open", help=t("Open the dashboard"))
     op.add_argument("--date")
     op.set_defaults(func=cmd_open)
 
-    cl = sub.add_parser("clean", help="清理过期数据")
+    cl = sub.add_parser("clean", help=t("Delete expired data"))
     cl.add_argument("--dry-run", action="store_true")
     cl.set_defaults(func=cmd_clean)
 
-    i = sub.add_parser("init", help="初始化目录与配置占位")
+    i = sub.add_parser("init", help=t("Create folders and a placeholder config"))
     i.set_defaults(func=cmd_init)
 
-    su = sub.add_parser("setup", help="首次运行引导：生成配置并列出待办")
+    su = sub.add_parser("setup", help=t("First-run guide: create the config and list what is left to do"))
     su.set_defaults(func=cmd_setup)
 
-    au = sub.add_parser("autostart", help="注册/移除开机自启（无需管理员）")
-    au.add_argument("--install", action="store_true", help="注册自启动（默认行为）")
-    au.add_argument("--remove", action="store_true", help="移除自启动")
-    au.add_argument("--status", action="store_true", help="查看当前状态")
+    au = sub.add_parser("autostart", help=t("Register or remove autostart (no admin needed)"))
+    au.add_argument("--install", action="store_true", help=t("Register autostart (default)"))
+    au.add_argument("--remove", action="store_true", help=t("Remove autostart"))
+    au.add_argument("--status", action="store_true", help=t("Show the current status"))
     au.set_defaults(func=cmd_autostart)
 
-    fg_ = sub.add_parser("forget", help="遗忘最近 N 分钟或某一整天的数据（不可逆）")
-    fg_.add_argument("--minutes", type=int, default=0, help="最近多少分钟")
-    fg_.add_argument("--day", help="整天遗忘，格式 YYYY-MM-DD")
-    fg_.add_argument("--yes", action="store_true", help="跳过交互确认（脚本/计划任务用）")
+    fg_ = sub.add_parser("forget", help=t("Forget the last N minutes or a whole day (irreversible)"))
+    fg_.add_argument("--minutes", type=int, default=0, help=t("How many recent minutes"))
+    fg_.add_argument("--day", help=t("Forget a whole day, as YYYY-MM-DD"))
+    fg_.add_argument("--yes", action="store_true", help=t("Skip the interactive confirmation (for scripts and scheduled tasks)"))
     fg_.set_defaults(func=cmd_forget)
 
-    ma = sub.add_parser("manual", help="人工补录与修订")
+    ma = sub.add_parser("manual", help=t("Manual entries and corrections"))
     ma.add_argument("action", choices=["add", "override", "notes", "show"],
-                    help="add 补录线下活动；override 改行为段标签；notes 加当天备注；show 查看")
-    ma.add_argument("--date", help="YYYY-MM-DD，默认今天（按 04:00 分界）")
-    ma.add_argument("--start", help="add 用：开始时间 HH:MM")
-    ma.add_argument("--end", help="add 用：结束时间 HH:MM")
-    ma.add_argument("--label", help="add/override 用：名称")
-    ma.add_argument("--seg", help="override 用：seg-03")
-    ma.add_argument("--verb", help="override 用：coding/debugging/testing/designing/reading/"
-                                   "writing/meeting/communicating/operating/admin")
-    ma.add_argument("--note", help="备注")
-    ma.add_argument("--text", help="notes 用：当天备注正文")
+                    help=t("add an offline activity; override a segment label; notes for the day; show them"))
+    ma.add_argument("--date", help=t("YYYY-MM-DD, defaults to today (04:00 cutoff)"))
+    ma.add_argument("--start", help=t("for add: start time HH:MM"))
+    ma.add_argument("--end", help=t("for add: end time HH:MM"))
+    ma.add_argument("--label", help=t("for add/override: the label"))
+    ma.add_argument("--seg", help=t("for override: seg-03"))
+    ma.add_argument("--verb", help=t("for override: coding/debugging/testing/designing/reading/writing/meeting/communicating/operating/admin"))
+    ma.add_argument("--note", help=t("Note"))
+    ma.add_argument("--text", help=t("for notes: the note text"))
     ma.set_defaults(func=cmd_manual)
 
-    rv = sub.add_parser("review", help="发送前审核：查看/确认/丢弃待发内容")
+    rv = sub.add_parser("review", help=t("Pre-send review: show, approve or discard queued content"))
     rv.add_argument("action", choices=["show", "approve", "discard"])
-    rv.add_argument("--date", help="YYYY-MM-DD，默认今天")
-    rv.add_argument("--chars", type=int, default=2000, help="show 时打印多少字")
+    rv.add_argument("--date", help=t("YYYY-MM-DD, defaults to today"))
+    rv.add_argument("--chars", type=int, default=2000, help=t("How many characters to print for show"))
     rv.set_defaults(func=cmd_review)
 
-    se = sub.add_parser("search", help="跨日检索标题/屏幕文字/日报（只在本机扫描）")
-    se.add_argument("query", nargs="+", help="关键词，多个词取全部命中")
-    se.add_argument("--days", type=int, default=14, help="回溯天数，1–365")
-    se.add_argument("--kind", help="title,ocr,report 的子集，默认全部")
-    se.add_argument("--limit", type=int, default=200, help="总命中上限")
+    se = sub.add_parser("search", help=t("Search titles, screen text and reports across days (local only)"))
+    se.add_argument("query", nargs="+", help=t("Keywords; when several are given, all must match"))
+    se.add_argument("--days", type=int, default=14, help=t("How many days back, 1-365"))
+    se.add_argument("--kind", help=t("Subset of title,ocr,report; all by default"))
+    se.add_argument("--limit", type=int, default=200, help=t("Maximum hits overall"))
     se.add_argument("--json", action="store_true")
     se.set_defaults(func=cmd_search)
 
-    wk = sub.add_parser("weekly", help="周汇总：聚合已生成的日报")
-    wk.add_argument("--anchor", help="以哪天所在的自然周为准，默认今天")
-    wk.add_argument("--start", help="自定义起始日 YYYY-MM-DD")
-    wk.add_argument("--end", help="自定义结束日 YYYY-MM-DD")
-    wk.add_argument("--out", help="输出文件名（写到 reports/weekly/ 下）")
+    wk = sub.add_parser("weekly", help=t("Weekly summary: aggregate the generated reports"))
+    wk.add_argument("--anchor", help=t("Use the calendar week containing this day; defaults to today"))
+    wk.add_argument("--start", help=t("Custom start date, YYYY-MM-DD"))
+    wk.add_argument("--end", help=t("Custom end date, YYYY-MM-DD"))
+    wk.add_argument("--out", help=t("Output filename (written under reports/weekly/)"))
     wk.set_defaults(func=cmd_weekly)
 
-    ex = sub.add_parser("export", help="导出可对外分享的日报（去截图/原文/本机路径）")
-    ex.add_argument("--date", help="YYYY-MM-DD，默认今天")
-    ex.add_argument("--no-evidence", action="store_true", help="连证据字段一起去掉")
-    ex.add_argument("--out", help="输出文件名或绝对路径（只能写在 reports 内）")
+    ex = sub.add_parser("export", help=t("Export a shareable report (no screenshots, source text or local paths)"))
+    ex.add_argument("--date", help=t("YYYY-MM-DD, defaults to today"))
+    ex.add_argument("--no-evidence", action="store_true", help=t("Drop the evidence fields as well"))
+    ex.add_argument("--out", help=t("Output filename or absolute path (must stay inside reports)"))
     ex.set_defaults(func=cmd_export)
 
-    g = sub.add_parser("gui", help="打开图形界面")
-    g.add_argument("--shot", help="【开发用】启动后把窗口自身截图存到该路径并退出")
-    g.add_argument("--page", help="【开发用】截图前切到哪个页面：dash/reports/settings/diag")
-    g.add_argument("--day", help="【开发用】截图前在日报页选中哪一天")
+    g = sub.add_parser("gui", help=t("Open the graphical interface"))
+    g.add_argument("--shot", help=t("[dev] screenshot the window itself to this path, then exit"))
+    g.add_argument("--page", help=t("[dev] page to show before the screenshot: dash/reports/settings/diag"))
+    g.add_argument("--day", help=t("[dev] day to select on the Reports page before the screenshot"))
     g.set_defaults(func=cmd_gui)
     return p
 
@@ -915,6 +945,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
     _fix_console_encoding()
 
+    _apply_locale()
     parser = build_parser()
     if not argv:
         # 老版本的无窗口守护 exe 双击时进采集循环（升级后兼容一下）

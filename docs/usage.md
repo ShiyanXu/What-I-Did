@@ -1,230 +1,232 @@
-# 使用指南
+# Usage guide
 
-安装与首次配置见 [README 快速开始](../README.zh-CN.md#快速开始)。本文说明日常怎么用：界面、命令、出报机制，以及补录、审核、遗忘、检索这些操作的边界。
+> [简体中文](usage.zh-CN.md) · **English**
 
-## 界面
+Installation and first-time setup are covered by the [README quick start](../README.md#quick-start). This page is about day-to-day use: the UI, the commands, how reports get generated, and where the limits are on manual entries, review, forget and search.
 
-双击 `What-IDid.exe` 打开。四个页面：
+## Interface
 
-### 概览
+Double-click `What-IDid.exe` to open it. Four pages:
 
-- 顶部四条：采集状态、今日有效活动、今日记录条数、磁盘余量
-- 时间轴：今天的行为色带，鼠标移上去看细节；出报后会换成模型对每段的判断
-- 采集控制：开始 / 停止 / 暂停 30 分钟 / 恢复 / 立即生成日报 / 打开完整看板
-- 最近 14 天活跃度：点柱子直接跳到那天的日报
-- 顶部提示条会指出当前该做什么：采集没在跑、没注册自启、昨天的日报还没生成、有内容等你确认
+### Overview
 
-### 日报
+- Four figures along the top: capture status, today's effective activity, today's record count, free disk space
+- Timeline: today's behavior strips; hover for details. Once the report has run, the model's reading of each segment replaces them
+- Capture controls: start / stop / pause 30 minutes / resume / generate the report now / open the full dashboard
+- Activity over the last 14 days: click a bar to jump to that day's report
+- A banner at the top says what to do next: capture is not running, start at login is not registered, yesterday's report has not been generated, content is waiting for your confirmation
 
-左侧按日期归档，右侧读正文。右上角操作：
+### Reports
 
-| 操作 | 作用 |
+Dates on the left, report body on the right. Actions in the top right:
+
+| Action | What it does |
 | --- | --- |
-| 重新生成 | 按当前数据与配置重跑这一天 |
-| 完整看板 | 在浏览器打开当天的 HTML 页面 |
-| 复制 Markdown | 把正文复制到剪贴板，可直接粘进 Obsidian |
-| 补录 | 添加屏幕看不到的线下活动 |
-| 遗忘这天 | 二次确认后删除原始与派生数据 |
+| Regenerate | Re-run this day with the current data and configuration |
+| Full dashboard | Open this day's HTML page in the browser |
+| Copy Markdown | Copy the body to the clipboard, ready to paste into Obsidian |
+| Add entry | Add offline activity the screen cannot see |
+| Forget this day | Delete raw and derived data after a second confirmation |
 
-开启发送前审核后，这里会出现「待审核」徽章与「审核并发送 / 丢弃」。
+With pre-send review enabled, a "pending review" badge shows up here together with "Review and send / Discard".
 
-### 设置
+### Settings
 
-模型地址与 Key、外发开关、截图范围、采样间隔、OCR 引擎、出报钟点与发送前审核、保留期、隐私名单、开机自启。
+Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, report hour and pre-send review, retention, privacy lists, start at login.
 
-保存只改写 `config.yaml` 里对应那一行，注释、对齐与块状列表原样保留——不是整份 `yaml.dump` 重排。改完会自动重启采集让新配置生效，但**改出报钟点后仍需重新注册计划任务**。
+Saving rewrites only the matching line in `config.yaml`; comments, alignment and block lists are left exactly as they were — it is not a full `yaml.dump` rewrite. Saving restarts capture so the new settings apply, but **changing the report hour still requires re-registering the scheduled task**.
 
-### 诊断
+### Diagnostics
 
-一键自检、实测 OCR、清理预览、打开日志与数据目录。自检结论与命令行 `doctor` 完全一致，因为两处调用同一套判定。
+One-click self-check, live OCR test, cleanup preview, open logs and data directory. The self-check verdict matches the `doctor` command exactly, because both call the same set of checks.
 
-## 托盘
+## Tray
 
-| 操作 | 效果 |
+| Action | Effect |
 | --- | --- |
-| 左键单击 | 把主窗口叫回来 |
-| 右键 | 打开主窗口 / 开始·暂停采集 / 立即生成今日日报 / 诊断与清理 / 退出（停止采集） |
-| 点窗口的 × | 收起界面，**采集继续**，图标留在托盘 |
+| Left click | Bring the main window back |
+| Right click | Open main window / start · pause capture / generate today's report now / diagnostics and cleanup / quit (stop capture) |
+| Click the window's × | Hides the UI, **capture keeps running**, the icon stays in the tray |
 
-Windows 10/11 默认把新图标塞进任务栏的「^」溢出区，第一次要多点一下展开；把它拖到常驻区之后就一直在外面了。这个行为没有 API 能强制改变。
+Windows 10/11 files new icons into the "^" overflow area by default, so the first time you have to click once to expand it; drag it onto the resident area and it stays out there. No API can force this.
 
-## 命令行
+## Command line
 
-把 exe 当命令用（在文件夹里按住 Shift 右键 →「在此处打开 PowerShell」）。同一个程序，带子命令就走命令行。
+Use the exe as a command (inside the folder, hold Shift and right-click → "Open PowerShell here"). It is the same program: add a subcommand and it runs as a CLI.
 
-### 日常
+### Everyday
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `What-IDid.exe` | 打开图形界面（等同双击） |
-| `What-IDid.exe setup` | 首次运行引导：生成配置并列出待办 |
-| `What-IDid.exe doctor` | 环境自检；`--full` 附带跑一次真实 OCR；`--json` 输出机器可读结果 |
-| `What-IDid.exe status` | 心跳、今日事件数、截图数、磁盘、最近日报、出报状态 |
-| `What-IDid.exe start` / `stop` | 启动 / 停止后台采集 |
-| `What-IDid.exe pause --minutes 60` / `resume` | 临时暂停 / 恢复（开会、共享屏幕时用） |
-| `What-IDid.exe open [--date 2026-10-19]` | 打开看板 |
+| `What-IDid.exe` | Open the graphical interface (same as double-clicking) |
+| `What-IDid.exe setup` | First-run wizard: generate the config and list what is left to do |
+| `What-IDid.exe doctor` | Environment self-check; `--full` also runs a real OCR pass; `--json` emits machine-readable output |
+| `What-IDid.exe status` | Heartbeat, today's event count, screenshot count, disk, latest report, report status |
+| `What-IDid.exe start` / `stop` | Start / stop background capture |
+| `What-IDid.exe pause --minutes 60` / `resume` | Temporarily pause / resume (meetings, screen sharing) |
+| `What-IDid.exe open [--date 2026-10-19]` | Open the dashboard |
 
-### 出报
+### Reports
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `What-IDid.exe report --date 2026-10-19` | 生成某天日报 |
-| `... report --force` | 忽略"已是最新"直接重跑 |
-| `... report --no-open` | 生成后不弹浏览器 |
-| `What-IDid.exe tick` | 计划任务入口：检查哪些天该出报并逐天生成 |
+| `What-IDid.exe report --date 2026-10-19` | Generate a given day's report |
+| `... report --force` | Ignore "already up to date" and re-run |
+| `... report --no-open` | Do not open the browser afterwards |
+| `What-IDid.exe tick` | Scheduled-task entry point: work out which days are due and generate them one by one |
 
-`report` 在审核模式下的退出码是 0：内容已准备好，只是等你确认。
+In review mode `report` exits with code 0: the content is ready, it is just waiting for your confirmation.
 
-### 审核
+### Review
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `What-IDid.exe review show --date 2026-10-19 --chars 3000` | 打印将要发给模型的原文 |
-| `What-IDid.exe review approve --date 2026-10-19` | 确认并真正发送 |
-| `What-IDid.exe review discard --date 2026-10-19` | 丢弃，不外发、不动已有日报 |
+| `What-IDid.exe review show --date 2026-10-19 --chars 3000` | Print the exact text that would be sent to the model |
+| `What-IDid.exe review approve --date 2026-10-19` | Confirm and actually send it |
+| `What-IDid.exe review discard --date 2026-10-19` | Discard: nothing is sent, the existing report is untouched |
 
-### 人工修订
+### Manual revisions
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `manual add --date 2026-10-19 --start 10:00 --end 11:00 --label "线下会议"` | 补录线下活动 |
-| `manual override --date 2026-10-19 --seg seg-03 --verb meeting --label "复盘会"` | 改某段行为的标签 |
-| `manual notes --date 2026-10-19 --text "今天在等接口"` | 加当天备注 |
-| `manual show --date 2026-10-19` | 查看当前修订内容 |
+| `manual add --date 2026-10-19 --start 10:00 --end 11:00 --label "offline meeting"` | Add offline activity |
+| `manual override --date 2026-10-19 --seg seg-03 --verb meeting --label "retro"` | Relabel one behavior segment |
+| `manual notes --date 2026-10-19 --text "waiting on the API today"` | Add a note for the day |
+| `manual show --date 2026-10-19` | Show the current revisions |
 
-`--verb` 可选：`coding` `debugging` `testing` `designing` `reading` `writing` `meeting` `communicating` `operating` `admin`。
+`--verb` accepts: `coding` `debugging` `testing` `designing` `reading` `writing` `meeting` `communicating` `operating` `admin`.
 
-### 检索与汇总
+### Search and summaries
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `search 日报 校验 --days 30` | 跨日检索标题、屏幕文字与日报；多个词取全部命中 |
-| `... --kind ocr` | 只搜某一类（`title` / `ocr` / `report`，可组合） |
-| `... --limit 200 --json` | 限制总数、输出机器可读结果 |
-| `weekly` | 本周汇总 |
-| `weekly --anchor 2026-10-19` | 指定日期所在的自然周（周一至周日） |
-| `weekly --start 2026-10-01 --end 2026-10-31` | 自定义区间，最长 62 天 |
-| `export --date 2026-10-19` | 导出可对外分享的日报 |
-| `... export --no-evidence` | 连证据字段一起去掉 |
+| `search 日报 校验 --days 30` | Cross-day search over titles, screen text and reports; multiple terms must all match |
+| `... --kind ocr` | Search one kind only (`title` / `ocr` / `report`, combinable) |
+| `... --limit 200 --json` | Cap the total, emit machine-readable output |
+| `weekly` | This week's summary |
+| `weekly --anchor 2026-10-19` | The calendar week (Monday to Sunday) containing the given date |
+| `weekly --start 2026-10-01 --end 2026-10-31` | Custom range, 62 days maximum |
+| `export --date 2026-10-19` | Export a report you can share |
+| `... export --no-evidence` | Strip the evidence fields as well |
 
-### 维护
+### Maintenance
 
-| 命令 | 说明 |
+| Command | Purpose |
 | --- | --- |
-| `What-IDid.exe clean --dry-run` | 预览会删掉什么；去掉 `--dry-run` 才真删 |
-| `What-IDid.exe forget --minutes 30` | 遗忘最近 30 分钟（不可逆） |
-| `What-IDid.exe forget --day 2026-10-19` | 遗忘一整天 |
-| `... forget --yes` | 跳过交互确认，供脚本使用 |
-| `What-IDid.exe ocr-test --screen` | 按当前范围与隐私规则识别；暂停、锁屏、名单不可绕过，结束删除临时图 |
-| `What-IDid.exe autostart --status` / `--install` / `--remove` | 查看 / 注册 / 移除开机自启 |
-| `What-IDid.exe init` | 只初始化目录与配置占位 |
-| `What-IDid.exe collect --once` / `--duration 60` | 前台调试采集 |
-| `What-IDid.exe daemon` | 常驻采集（一般由 `start` 或计划任务拉起） |
+| `What-IDid.exe clean --dry-run` | Preview what would be deleted; drop `--dry-run` to actually delete |
+| `What-IDid.exe forget --minutes 30` | Forget the last 30 minutes (irreversible) |
+| `What-IDid.exe forget --day 2026-10-19` | Forget a whole day |
+| `... forget --yes` | Skip the interactive confirmation, for scripts |
+| `What-IDid.exe ocr-test --screen` | Run OCR under the current scope and privacy rules; pause, lock screen and blocklists cannot be bypassed; the temporary image is deleted at the end |
+| `What-IDid.exe autostart --status` / `--install` / `--remove` | Inspect / register / remove start at login |
+| `What-IDid.exe init` | Create only the directories and config placeholders |
+| `What-IDid.exe collect --once` / `--duration 60` | Foreground capture, for debugging |
+| `What-IDid.exe daemon` | Resident capture process (normally started by `start` or the scheduled task) |
 
-> 无控制台程序在 cmd 里的固有副作用：会「先归还提示符、再打印输出」。输出不会丢，只是可能与后续命令交错。要用管道就 `What-IDid.exe status | more`，或用 `start /wait What-IDid.exe doctor`。
+> A side effect of console-less programs in cmd: they "return the prompt first, then print". The output is not lost, it just may interleave with the next command. To pipe it, use `What-IDid.exe status | more`, or `start /wait What-IDid.exe doctor`.
 
-## 出报机制
+## How reports get generated
 
-一天的时间窗口从 04:00 到次日 04:00（`app.day_cutoff_hour`）。默认 21:00 尝试出报，之后：
+A day runs from 04:00 to 04:00 the next morning (`app.day_cutoff_hour`). By default it tries at 21:00, and then:
 
-| 时机 | 行为 |
+| When | What happens |
 | --- | --- |
-| 21:00 起每 20 分钟 | 复查一次，共 2 小时；没有新增覆盖就跳过 |
-| 新增覆盖达到 90 分钟 | 允许增量更新一版 |
-| 登录后 3 分钟 | 补跑（晚上没开机，第二天补上昨天那份） |
-| 次日 04:05 | 出终版，把 21 点之后的工作也写进去 |
+| Every 20 minutes from 21:00 | Re-check, for 2 hours; skip when there is no new coverage |
+| New coverage reaches 90 minutes | An incremental update is allowed |
+| 3 minutes after login | Catch-up run (the machine was off last night, so yesterday's report is produced today) |
+| 04:05 the next day | Final version, folding in work done after 21:00 |
 
-自动出报只在**终版**生成后打开浏览器看板（`report.open_browser` 控制）：21:00 首版与晚间的增量更新都不弹，一次补多天的漏报也只弹最新那一天，免得一晚弹好几遍。手动 `report` 命令每次生成都会弹，加 `--no-open` 可禁。
+Automatic generation opens the browser dashboard only after the **final version** (`report.open_browser` controls this): neither the 21:00 first version nor the evening incremental updates open anything, and a catch-up run covering several days opens only the most recent one — no need to have several tabs pop up in one evening. The manual `report` command opens the browser on every run; `--no-open` turns that off.
 
-出报状态分四个维度记录：**覆盖到哪**、**模型是否成功**、**输入是否变化**、**第几版**。所以"出过报"不等于"AI 分析成功"：一份降级版在 `report.degraded_retry_hours`（默认 12 小时）内、且未超过 `report.max_upgrade_attempts`（默认 3 次）时，会自动重试升级成 AI 版。
+Report status is recorded along four separate dimensions: **how far it covers**, **whether the model succeeded**, **whether the input changed**, **which revision it is**. So "a report exists" is not the same as "the AI analysis succeeded": a degraded report is retried and upgraded automatically while it is within `report.degraded_retry_hours` (default 12 hours) and under `report.max_upgrade_attempts` (default 3).
 
-当天完全没有数据时不生成空日报，避免首次安装就刷出一堆空页。
+A day with no data at all produces no empty report, so a fresh install does not fill the page with blank days.
 
-### 发送前审核
+### Pre-send review
 
-`report.review_mode=true` 时，到点不再直接调模型：
+With `report.review_mode=true`, the scheduled time no longer calls the model directly:
 
-1. 把"将要发给模型的原文"写到 `state/day/<日期>-review.json`；
-2. 停在待审状态，`report` 返回 `awaiting_review`；
-3. 你确认后才真正发请求；确认时复用的是预览里那份内容（输入未变、1 小时内、目标地址与模型未变），不会偷偷重建一份。
+1. the "text about to be sent to the model" is written to `state/day/<date>-review.json`;
+2. it stops in a pending state, and `report` returns `awaiting_review`;
+3. the request only goes out after you confirm; confirmation reuses the content from the preview (input unchanged, under 1 hour, same endpoint and model) rather than quietly rebuilding it.
 
-三个时间窗各管一件事：
+Three time windows, one job each:
 
-| 时间窗 | 值 | 作用 |
+| Window | Value | Effect |
 | --- | --- | --- |
-| 预览复用 | 30 分钟 | 同输入重复触发时不再重造预览 |
-| 确认复用 | 1 小时 | 确认时仍发预览里那份内容，超时则按当前输入重建 |
-| 待审有效 | 12 小时 | 超过后视为放弃，允许重新准备 |
+| Preview reuse | 30 minutes | Repeated triggers on the same input do not rebuild the preview |
+| Confirmation reuse | 1 hour | Confirming sends what the preview held; past that, it rebuilds from the current input |
+| Pending validity | 12 hours | After that the review is considered abandoned and can be prepared again |
 
-待审内容不会被当成"漏报"反复触发。
+Pending content is never counted as a "missed report" and re-triggered.
 
-## 人工补录与改标
+## Manual entries and relabeling
 
-屏幕看不出你在开会、在白板上画图、在打电话。补录就是把这些时段告诉程序：
+The screen cannot tell that you were in a meeting, drawing on a whiteboard or on a call. Manual entries tell the program about those stretches:
 
 ```bat
-What-IDid.exe manual add --start 10:00 --end 11:00 --label "线下客户沟通" --note "电话会议"
+What-IDid.exe manual add --start 10:00 --end 11:00 --label "offline customer call" --note "conference call"
 ```
 
-- 时间只接受当天的 `HH:MM`，小时或分钟越界会直接报错；
-- 同一时段同一名称重复补录只更新备注，不会叠加两条；
-- 补录会同时进入模型输入，模型知道"这段时间人在开会，不是摸鱼"；
-- 与自动产物完全分离，重跑、清理都不会动它；每次出报重新套用，**你的修订永远赢**；
-- 模板里有独立的「人工补录」小节，不混进正文。
+- Times accept only `HH:MM` within the current day; an out-of-range hour or minute is an error;
+- Re-adding the same label over the same stretch only updates the note, it does not stack a second entry;
+- Manual entries also feed the model input, so the model knows "this stretch was a meeting, not slacking off";
+- They are kept completely separate from automatic output: re-runs and cleanup never touch them, and they are re-applied on every generation — **your revisions always win**;
+- The template has a dedicated "manual entries" section; they are not mixed into the body.
 
-## 遗忘
+## Forget
 
-| 命令 | 删除范围 |
+| Command | What gets deleted |
 | --- | --- |
-| `forget --minutes N` | 最近 N 分钟的事件、截图、缩略图、OCR；受影响当天的日报、页面、日状态、待审预览、分享版，以及覆盖该天的周汇总 |
-| `forget --day D` | 上述范围 + 整天数据目录（含人工补录） |
+| `forget --minutes N` | Events, screenshots, thumbnails and OCR for the last N minutes; the affected day's report, pages, day status, review preview and shareable export, plus any weekly summary covering that day |
+| `forget --day D` | The above plus the whole day's data directory (manual entries included) |
 
-危险操作默认交互确认，**只有显式输入 `y` 才算同意**，回车视为取消；脚本里要加 `--yes`。界面在每份日报上也有「遗忘这天」。
+Destructive operations confirm interactively by default; **only an explicit `y` counts as consent**, Enter means cancel. Scripts need `--yes`. Every report in the UI also has a "Forget this day" action.
 
-删除的是本工具管理的数据，**无法撤回**已经发送给模型服务、或被你另存、同步到别处的副本。脱敏与发送前审核才是第一道防线。
+What gets deleted is the data this tool manages. Copies **cannot be recalled** once they have been sent to a model provider, or saved and synced elsewhere by you. Redaction and pre-send review are the first line of defence.
 
-## 跨日检索
+## Cross-day search
 
 ```bat
 What-IDid.exe search 幂等 校验 --days 30
 ```
 
-只在本地扫描 `data/<日期>/events.jsonl`（窗口标题与应用）、`ocr.jsonl`（脱敏文字）、`reports/<日期>.json`（日报叙述）。多个关键词取 **AND**，大小写不敏感；单日命中上限 30 条，总量由 `--limit` 控制，结果会标明是否截断。没有命中时退出码为 1，并说明可能原因（范围太小、关键词太严）。
+It scans only local files: `data/<date>/events.jsonl` (window titles and apps), `ocr.jsonl` (redacted text) and `reports/<date>.json` (report narrative). Multiple keywords are combined with **AND** and matching is case-insensitive; a day is capped at 30 hits, the total is controlled by `--limit`, and the result says whether it was truncated. With no hits the exit code is 1 and it explains the likely cause (range too small, keywords too strict).
 
-空关键词、`--days` 越界、未知 `--kind` 都是明确报错，不会静默返回空结果。
+An empty keyword, `--days` out of range or an unknown `--kind` are all explicit errors — never a silent empty result.
 
-## 周汇总
+## Weekly summary
 
 ```bat
 What-IDid.exe weekly --anchor 2026-10-19
 ```
 
-只聚合**已生成**的日报，不重新调用模型——周汇总里的每句话都能在某份日报里找到出处。缺报的天标「缺报」并单独列出（不是"没工作"），损坏的标「损坏」，降级的标「时间线」并提示可信度低。条目按前 40 字去重，单类最多 40 条。输出 `reports/weekly/<起始日>_<结束日>.md`。
+It aggregates **already generated** reports only and never calls the model again — every sentence in a weekly summary can be traced back to some daily report. Missing days are marked "missing" and listed separately (that is not "no work"); corrupt ones are marked "corrupt"; degraded ones are marked "timeline" with a note that confidence is low. Items are deduplicated by their first 40 characters, up to 40 per category. Output goes to `reports/weekly/<start>_<end>.md`.
 
-## 分享版
+## Shareable export
 
 ```bat
 What-IDid.exe export --date 2026-10-19
 ```
 
-给同事或上级看时用这份。默认去掉：截图与缩略图、OCR 原文、`block_ids` / `seg_id`、内部备注、数据缺口细节、本机路径（盘符路径、`/Users/...`、`/home/...`、`data/<日期>/...`、Git Bash 的 `/e/...`、UNC）。只保留外部 `http(s)` 链接，最后整篇再过一遍脱敏规则。
+Use this one when showing a colleague or a manager. By default it removes: screenshots and thumbnails, raw OCR text, `block_ids` / `seg_id`, internal notes, data-gap details, and local paths (drive-letter paths, `/Users/...`, `/home/...`, `data/<date>/...`, Git Bash `/e/...`, UNC). Only external `http(s)` links survive, and the whole document is run through the redaction rules one last time.
 
-输出 `reports/share/<日期>-分享版.md`。没有日报或 JSON 损坏时明确报错，不产出半份文件。
+Output goes to `reports/share/<date>-share.md`. The file name does not follow the UI language, so switching languages never leaves a second copy behind. If the report is missing or the JSON is corrupt it fails loudly instead of writing half a file.
 
-> 分享版仍然是人写的文字，发出去之前请自己再读一遍。它不是脱敏保证。
+> The shareable export is still human-written text. Read it once yourself before sending it. It is not a redaction guarantee.
 
-## 换电脑、多台电脑、U 盘
+## Moving machines, several machines, USB sticks
 
-- **换电脑**：拷整个文件夹过去，双击运行，向导会重新注册自启（自启动记录是本机的，不跟着走）。`data\`、`reports\`、`web\` 一起拷过去就能接着看历史。
-- **数据放别处**：设环境变量 `WID_HOME=D:\MyWorkLog`，所有数据写到那里，程序目录保持干净。设置它**不会**自动搬迁已有数据，要先手动拷。
-- **U 盘随身**：`WID_HOME` 指向 U 盘会让 IO 变慢，更推荐数据留本机、只把 `reports\` 拷走。
-- **多台各跑各的**：互不干扰。想合看板，把各机器的 `reports\*.json` 收进同一个 `reports\` 再重新渲染即可。
+- **New machine**: copy the whole folder over, double-click, and the wizard re-registers start at login (that registration is per machine and does not travel). Copy `data\`, `reports\` and `web\` together and the history comes along.
+- **Data somewhere else**: set `WID_HOME=D:\MyWorkLog` and everything is written there, leaving the program directory clean. Setting it does **not** migrate existing data; copy that manually first.
+- **USB stick**: pointing `WID_HOME` at a USB stick slows IO down; keeping data local and copying only `reports\` is the better trade.
+- **Several machines, each on its own**: they do not interfere. To read them as one dashboard, collect each machine's `reports\*.json` into a single `reports\` and re-render.
 
-## 卸载
+## Uninstall
 
 ```bat
 What-IDid.exe stop
 What-IDid.exe autostart --remove
 ```
 
-然后删掉整个文件夹（数据也在一起）。若数据在 `%LOCALAPPDATA%\What-IDid`，连它一起删。
+Then delete the whole folder (your data is in there too). If the data lives in `%LOCALAPPDATA%\What-IDid`, delete that as well.

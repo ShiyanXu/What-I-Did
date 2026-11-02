@@ -1,105 +1,107 @@
-# 隐私说明
+# Privacy
 
-What-IDid 记录的是屏幕内容，这件事本身就需要被审慎对待。这一页说明程序在哪里划线、线画得多严，以及哪些事它做不到。
+> [简体中文](privacy.zh-CN.md) · **English**
 
-## 三条原则
+What-IDid records what is on your screen, and that deserves to be treated carefully. This page explains where the program draws the line, how strict the line is, and what it honestly cannot do.
 
-1. **图片不出本机**。截图与 OCR 全部本地完成，进入模型请求的只有脱敏后的文本。
-2. **默认最小**。默认只抓活动窗口；窗口不可用时跳过，而不是退而求其次抓全屏。
-3. **拒绝要看得见**。配置写坏、隐私规则非法时停止处理并报出原因，不静默退回"安全的默认值"假装还能跑。
+## Three principles
 
-## 四种模式
+1. **Images never leave the machine.** Screenshots and OCR all happen locally; only redacted text enters a model request.
+2. **Minimal by default.** Only the active window is captured; when the window is unavailable the frame is skipped rather than falling back to the full screen.
+3. **Refusals are visible.** A broken config or an invalid privacy rule stops processing and reports why, instead of silently falling back to "safe defaults" and pretending it still works.
 
-| 场景 | 本地记录 | 图像与 OCR | 是否进模型 |
+## Four modes
+
+| Situation | Local record | Images and OCR | Reaches the model |
 | --- | --- | --- | --- |
-| 暂停、锁屏、名单屏蔽、配置错误 | 仅匿名时间刻度 | 不采集 | 无内容 |
-| 仅记应用与时长（`skip_ocr_apps`） | 应用名、匿名标题、时长 | 不采集 | 只有应用与观测时长 |
-| 正常采集 | 脱敏标题与观测信息 | 按显式范围采集，本地识别 | 出口再次脱敏后发送 |
-| 禁止外发（`allow_llm=false`） | 同正常采集 | 同正常采集 | 不发送，含连接测试 |
+| Paused, locked, blocklisted, config error | Anonymous time ticks only | Not collected | Nothing |
+| App and duration only (`skip_ocr_apps`) | App name, anonymous title, duration | Not collected | App and observed duration only |
+| Normal capture | Redacted titles and observation data | Collected within the explicit scope, recognized locally | Sent after redaction at the boundary |
+| Outbound disabled (`allow_llm=false`) | Same as normal capture | Same as normal capture | Not sent, connection test included |
 
-表中的"无内容"指被拒绝的样本不贡献窗口、图像与 OCR；**它不代表暂停就自动禁止对早先已记录的数据出报**。要彻底不外发，请显式关掉 `privacy.allow_llm`。
+"Nothing" in the table means a rejected sample contributes no window, image or OCR. **It does not mean pausing automatically forbids generating reports from data recorded earlier.** To rule out outbound calls entirely, turn off `privacy.allow_llm` explicitly.
 
-## 采集边界
+## Capture boundaries
 
-| 机制 | 行为 |
+| Mechanism | Behaviour |
 | --- | --- |
-| 截图范围 | 默认 `active_window`；`all_screens` 必须显式选择。窗口矩形拿不到或裁剪失败时跳过 |
-| 应用黑名单 `blocked_apps` | 精确进程名匹配，不区分大小写。只留匿名状态，不存应用名、标题、位置、图像与 OCR |
-| 仅应用模式 `skip_ocr_apps` | 微信、QQ 等只记应用与观测时长：不存标题、不存图、不 OCR。重新处理旧数据时同样过滤 |
-| 标题黑名单 `blocked_title_patterns` | 命中正则即匿名化。写错正则会让配置失效并停止处理，不会静默忽略 |
-| 暂停 / 锁屏 / 空闲 | 只留匿名刻度。强制采样只能跳过空闲判断，**绕不过**显式暂停、锁屏、名单与配置错误 |
-| 手动 OCR 诊断 | 与采集共用同一套隐私判断；临时图在结束时删除。外部 OCR 程序自身的行为不由本工具保证 |
+| Screenshot scope | `active_window` by default; `all_screens` must be chosen explicitly. The frame is skipped when the window rectangle is unavailable or cropping fails |
+| App blocklist `blocked_apps` | Exact process-name match, case-insensitive. Only an anonymous state is kept: no app name, title, position, image or OCR |
+| App-only mode `skip_ocr_apps` | WeChat, QQ and similar record only the app and observed duration: no title, no image, no OCR. The same filter applies when reprocessing old data |
+| Title blocklist `blocked_title_patterns` | A match anonymizes the title. A bad regex invalidates the config and stops processing; it is never silently ignored |
+| Pause / lock screen / idle | Anonymous ticks only. Forced sampling can skip the idle check but **cannot bypass** an explicit pause, the lock screen, the blocklists or a config error |
+| Manual OCR diagnostics | Shares the same privacy decisions as capture; the temporary image is deleted at the end. The behaviour of an external OCR program is outside this tool's control |
 
-窗口矩形不等于应用级隔离：透明背景、浮层、窗口内嵌的敏感内容仍会被截进来。这类内容靠名单或暂停来控制，程序无法自动识别。
+The window rectangle is not app-level isolation: transparent backgrounds, overlays and sensitive content embedded inside a window still get captured. That kind of content is controlled with the blocklists or by pausing — the program cannot detect it for you.
 
-## 脱敏链路
+## The redaction chain
 
-同一套规则在四个位置生效，任何一处漏掉都算失败：
+The same rules apply at four points, and missing any one of them counts as a failure:
 
-1. **写盘前** — 标题与 OCR 文本落进 `events.jsonl` / `ocr.jsonl` 之前；
-2. **历史重读** — 重新生成日报时，按**当前**配置重新过滤旧数据；
-3. **摘要前** — 压缩成模型输入之前；
-4. **HTTP 出口** — 真正发出请求之前，还会检查最新配置与外发开关，并把当前模型 Key 本身也替换掉。
+1. **Before writing to disk** — titles and OCR text, before they land in `events.jsonl` / `ocr.jsonl`;
+2. **On history re-read** — when regenerating a report, old data is filtered again against the **current** configuration;
+3. **Before summarization** — before compression into the model input;
+4. **At the HTTP boundary** — before the request actually goes out, the latest config and outbound switch are checked again, and the current model key is replaced too.
 
-内置且不可关闭的规则覆盖：常见 `sk-` 密钥、GitHub token（含 `github_pat_`）、身份证号、手机号、邮箱。`privacy.redact_patterns` 可以追加自定义正则。
+The built-in, non-disableable rules cover: common `sk-` keys, GitHub tokens (including `github_pat_`), national ID numbers, phone numbers and emails. `privacy.redact_patterns` adds your own regexes.
 
-**正则不是敏感信息识别系统**：它不理解语义，也不给截图像素打码。
+**Regexes are not a sensitive-data detection system**: they do not understand meaning, and they do not blur pixels in a screenshot.
 
-## 本地 OCR 的边界
+## Limits of local OCR
 
-- 走 HTTP 时**只允许回环地址**，不走系统代理，不跟随重定向；
-- 非 `http(s)`、带凭据或带查询参数的地址一律拒绝；
-- 用 Umi-OCR 时，图片会被送到本机的 Umi 进程——这是你自己信任的本地程序，不在本工具的控制范围内。
+- Over HTTP, **loopback addresses only**; no system proxy, no following redirects;
+- Anything that is not `http(s)`, or that carries credentials or query parameters, is rejected;
+- With Umi-OCR, images go to the local Umi process — a local program you chose to trust, outside this tool's control.
 
-## 外发控制
+## Outbound control
 
-| 开关 | 效果 |
+| Switch | Effect |
 | --- | --- |
-| `privacy.allow_llm = false` | 禁止一切模型请求，包括「测试连接」和自动重试；本地记录与时间线日报照常 |
-| `report.review_mode = true` | 到点只把待发原文落盘，你确认后才发。确认时复用的就是你看过的那份内容 |
-| `report.open_browser = false` | 只是不弹浏览器，**不是**外发审批 |
+| `privacy.allow_llm = false` | Blocks every model request, including "Test connection" and automatic retries; local recording and timeline reports carry on |
+| `report.review_mode = true` | At the scheduled time only the pending text is written to disk; it is sent after you confirm, and confirmation reuses exactly the content you saw |
+| `report.open_browser = false` | Only stops the browser opening; it is **not** outbound approval |
 
-暂停采集**不会**取消已有日报的模型分析——那是两件事。
+Pausing capture does **not** cancel the model analysis of a report already in progress — those are two different things.
 
-## 留存与删除
+## Retention and deletion
 
-| 数据 | 默认保留 | 过期后 |
+| Data | Kept by default | After expiry |
 | --- | --- | --- |
-| 截图与缩略图 | 7 天 | 删除；日报页自动重渲，缩略图位留空，不留死链 |
-| 事件流 | 30 天 | 随整日目录删除 |
-| 脱敏 OCR 文本 | 30 天 | 随整日目录删除 |
-| 报告附录中的 OCR 摘录 | 跟随事件期限（默认 30 天） | 清空 JSON 摘录并重渲页面，不依赖原始目录是否还在 |
-| 日报叙述、标题、统计、引用 | 长期 | 不受摘录清理影响；叙述中可能包含 OCR 衍生信息 |
+| Screenshots and thumbnails | 7 days | Deleted; the report page re-renders automatically and the thumbnail slot stays empty, with no dead links |
+| Event stream | 30 days | Deleted with the whole day directory |
+| Redacted OCR text | 30 days | Deleted with the whole day directory |
+| OCR excerpts in report appendices | Follows the event retention (30 days by default) | The JSON excerpt is emptied and the page re-rendered, regardless of whether the original directory still exists |
+| Report narrative, titles, stats, references | Long term | Unaffected by excerpt cleanup; the narrative may still contain OCR-derived information |
 
-清理由运行中的采集进程在 `clean_hour`（默认 04:00）后执行；采集没在跑就不会自动清理，需要手动 `clean`。清理不会删除日报叙述、你另存的副本、Obsidian 归档或任何外部备份。
+Cleanup runs inside the capture process after `clean_hour` (04:00 by default); with capture not running nothing is cleaned up automatically and you need to run `clean` by hand. Cleanup never deletes report narratives, copies you saved elsewhere, your Obsidian archive or any external backup.
 
-**主动删除**：
-
-```bat
-What-IDid.exe forget --minutes 30      :: 最近半小时
-What-IDid.exe forget --day 2026-10-19  :: 一整天
-```
-
-`forget` 会连带清理受影响当天的日报、页面、日状态、待审预览、分享版，以及覆盖该天的周汇总。界面每份日报上也有「遗忘这天」。
-
-## 分享版
-
-`export` 生成的对外版本默认不含截图、缩略图、OCR 原文、`block_ids`、`seg_id`、内部备注、数据缺口细节与本机路径，并在最后整篇再过一遍脱敏。它仍然是人写的文字——发出去之前请自己再看一遍。
-
-## 做不到的事
-
-- **不能保证识别全部敏感信息**：正则不理解语义，截图像素不做打码；全屏模式会包含副屏与后台窗口，名单只判断前台。
-- **不能撤回已发送的内容**：发给模型服务的数据、你复制或同步到别处的副本，本地删除无法影响。
-- **不会自动改写历史日报**：历史原文在重新生成时才会应用新策略；已有摘录在后续清理时按保留期处理。
-- **不是操作系统级隔离**：这是操作边界检查。程序崩溃或文件被占用时，临时图片可能残留（超过一小时的临时文件由后续清理兜底）。
-- **清理不是跨文件事务**：JSON 与 HTML 各自原子替换，中途失败可能暂时留下旧页面，重试即可。
-
-## 自查方式
+**Deleting on purpose**:
 
 ```bat
-What-IDid.exe doctor              :: 看「配置/隐私」与「OCR」两项结论
-What-IDid.exe status              :: 配置有问题时 JSON 里会出现 privacy_error
-What-IDid.exe ocr-test --screen   :: 实际走一遍隐私判断再识别，结束删除临时图
+What-IDid.exe forget --minutes 30      :: the last half hour
+What-IDid.exe forget --day 2026-10-19  :: a whole day
 ```
 
-发现自己被误记了，最直接的办法是 `forget --minutes`；想验证"到底记了什么"，看 `data\<日期>\` 下的 `events.jsonl` 与 `ocr.jsonl` 即可——它们就是全部原始记录。
+`forget` also cleans up the affected day's report, pages, day status, review preview and shareable export, plus any weekly summary covering that day. Every report in the UI also has a "Forget this day" action.
+
+## Shareable export
+
+The outward version produced by `export` contains no screenshots, thumbnails, raw OCR text, `block_ids`, `seg_id`, internal notes, data-gap details or local paths, and the whole document is run through redaction one last time. It is still human-written text — read it once yourself before sending it.
+
+## What it cannot do
+
+- **It cannot find every piece of sensitive information**: regexes do not understand meaning, screenshot pixels are never blurred, full-screen mode includes secondary displays and background windows, and the blocklists only judge the foreground app.
+- **It cannot recall what has already been sent**: data sent to a model provider, or copies you made or synced elsewhere, are beyond the reach of local deletion.
+- **It does not rewrite past reports automatically**: historical text only picks up the new policy when it is regenerated; existing excerpts are handled by retention during later cleanup.
+- **It is not OS-level isolation**: this is a boundary check at the application level. If the program crashes or a file is locked, temporary images may be left behind (files older than an hour are swept up by later cleanup).
+- **Cleanup is not a cross-file transaction**: JSON and HTML are each replaced atomically, so a mid-way failure may leave an old page around temporarily; retry it.
+
+## How to check
+
+```bat
+What-IDid.exe doctor              :: read the "config/privacy" and "OCR" verdicts
+What-IDid.exe status              :: a config problem shows up as privacy_error in the JSON
+What-IDid.exe ocr-test --screen   :: run the real privacy decisions and then recognize; the temporary image is deleted at the end
+```
+
+If you find something recorded that should not have been, the most direct fix is `forget --minutes`; to verify "what exactly was recorded", look at `events.jsonl` and `ocr.jsonl` under `data\<date>\` — they are the complete raw record.

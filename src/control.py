@@ -1,6 +1,8 @@
 """采集进程的启动/停止/暂停：CLI 与图形界面共用，避免两处判定逻辑走偏。"""
 from __future__ import annotations
 
+from i18n import join_list, t
+
 import json
 
 import paths
@@ -41,13 +43,14 @@ def start() -> tuple[bool, str]:
 
     hb = status.heartbeat()
     if hb["alive"]:
-        return False, f"采集已在运行（pid={hb['pid']}，{hb['age']} 秒前有心跳）"
+        return False, t("Capture is already running (pid={pid}, heartbeat {age}s ago)",
+                 pid=hb["pid"], age=hb["age"])
     paths.ensure_dirs()
     try:
         pid = autostart.spawn_daemon()
     except Exception as exc:
-        return False, f"启动失败：{exc}"
-    return True, f"已启动采集进程 pid={pid}"
+        return False, t("Start failed: {e}", e=exc)
+    return True, t("Capture process started, pid={pid}", pid=pid)
 
 
 def _find_daemons() -> list:
@@ -85,7 +88,7 @@ def stop() -> tuple[bool, str]:
         # 否则会出现「明明在采集，却说采集已退出」。
         targets = _find_daemons()
     if not targets:
-        return True, "采集进程没有在运行"
+        return True, t("The capture process is not running")
 
     killed = []
     for p in targets:
@@ -97,8 +100,8 @@ def stop() -> tuple[bool, str]:
                 p.kill()
             killed.append(str(p.pid))
         except Exception as exc:                     # noqa: BLE001
-            return False, f"停止 pid={p.pid} 失败：{exc}"
-    return True, "已停止采集进程 pid=" + "、".join(killed)
+            return False, t("Failed to stop pid={pid}: {e}", pid=p.pid, e=exc)
+    return True, t("Stopped the capture process, pid={pids}", pids=join_list(killed))
 
 
 def pause(minutes: int = 0) -> tuple[bool, str]:
@@ -109,14 +112,14 @@ def pause(minutes: int = 0) -> tuple[bool, str]:
     payload = {"paused_at": timeutil.iso(timeutil.now()),
                "until": timeutil.iso(until) if until else ""}
     paths.PAUSE_FILE.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    return True, (f"已暂停 {minutes} 分钟，到点自动恢复" if minutes else "已暂停采集，直到手动恢复")
+    return True, (t("Paused for {n} minutes; it resumes automatically", n=minutes) if minutes else t("Capture paused until you resume it"))
 
 
 def resume() -> tuple[bool, str]:
     if paths.PAUSE_FILE.exists():
         paths.PAUSE_FILE.unlink()
-        return True, "已恢复采集"
-    return True, "当前并未暂停"
+        return True, t("Capture resumed")
+    return True, t("Not paused right now")
 
 
 def restart() -> tuple[bool, str]:

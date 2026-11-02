@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from i18n import t
+
 import json
 import re
 import shutil
@@ -27,6 +29,8 @@ def _derived_paths(day: str) -> list[Path]:
         paths.web_day(day),
         paths.day_state(day),
         paths.DAY_STATE / f"{day}-review.json",
+        paths.REPORTS / "share" / f"{day}-share.md",
+        # v1.2 之前的旧命名，切过语言的机器上可能还留着
         paths.REPORTS / "share" / f"{day}-分享版.md",
     ]
 
@@ -162,7 +166,7 @@ def forget_minutes(minutes: int, cfg, log=None) -> dict:
     """删除最近 N 分钟的原始数据 + 受影响天的派生数据。"""
     minutes = int(minutes)
     if minutes <= 0 or minutes > 7 * 24 * 60:
-        raise ValueError("minutes 应在 1 到 10080（一周）之间")
+        raise ValueError(t("minutes must be between 1 and 10080 (one week)"))
     now = timeutil.now()
     lo = now - timedelta(minutes=minutes)
     removed = {"events": 0, "shots": 0, "ocr": 0, "days": [], "derived": []}
@@ -175,16 +179,16 @@ def forget_minutes(minutes: int, cfg, log=None) -> dict:
     _drop_weekly(removed["days"], removed["derived"])
     _refresh_index(cfg)
     if log:
-        log.info("遗忘最近 %d 分钟：删事件 %d / 截图 %d / OCR %d，涉及 %s",
+        log.info("Forgot the last %d minutes: %d events / %d shots / %d OCR records removed, days: %s",
                  minutes, removed["events"], removed["shots"], removed["ocr"],
-                 "、".join(removed["days"]) or "无")
+                 ", ".join(removed["days"]) or "none")
     return removed
 
 
 def forget_day(day: str, cfg, log=None) -> dict:
     """删除某一整天的一切（原始 + 派生 + 人工备注）。"""
     if not _DAY_RE.match(day or ""):
-        raise ValueError("day 应为 YYYY-MM-DD")
+        raise ValueError(t("day must be YYYY-MM-DD"))
     removed = {"days": [day], "events": 0, "shots": 0, "ocr": 0, "derived": []}
     dd = paths.day_dir(day)
     if dd.exists():
@@ -192,12 +196,12 @@ def forget_day(day: str, cfg, log=None) -> dict:
             shutil.rmtree(dd)
             removed["derived"].append(paths.rel_to_root(dd))
         except OSError as exc:
-            raise RuntimeError(f"删除 {dd} 失败：{exc}") from exc
+            raise RuntimeError(t("Failed to delete {path}: {e}", path=dd, e=exc)) from exc
     _drop_derived(day, removed["derived"])
     _drop_weekly([day], removed["derived"])
     _refresh_index(cfg)
     if log:
-        log.info("遗忘 %s：已删除 %s", day, "、".join(removed["derived"]))
+        log.info("Forgot %s: deleted %s", day, ", ".join(removed["derived"]))
     return removed
 
 

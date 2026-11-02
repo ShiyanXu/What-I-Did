@@ -12,6 +12,7 @@ from datetime import timedelta
 import paths
 import report as report_mod
 import timeutil
+from i18n import t
 
 # 同一天已出过报之后，至少再过这么久才允许下一次增量更新，
 # 否则 21:00 之后每次轮询都会重写一版，一天刷出十几个 revision
@@ -19,6 +20,31 @@ DEFAULT_REFRESH_GAP_MIN = 90
 
 # 待审内容的新鲜窗口：过了这个时间还没确认，就允许重新准备一份（覆盖旧预览）
 REVIEW_TTL_SEC = 12 * 3600
+
+#: 出报原因用**稳定的英文代码**，不要用显示文本。
+#: 判定逻辑要比较它（终版有额外的重试配额），日志和界面再翻成当前语言；
+#: 直接比较中文的话，切到英文就再也匹配不上了。
+WHY_FINAL = "final"
+
+WHY_LABELS = {
+    "window_not_open": "Before the day starts",
+    "no_data": "No capture data",
+    "review_pending": "Waiting for review",
+    "before_trigger": "Before the report time",
+    "first": "First generation",
+    "state_bad": "Broken day state",
+    "covered": "Already covered",
+    "input_changed": "Input changed",
+    "incremental": "Incremental update",
+    "degraded_upgrade": "Upgrading the degraded report",
+    "final": "Final version",
+    "latest": "Up to date",
+}
+
+
+def why_text(key: str) -> str:
+    """原因代码 -> 当前语言的说明文字。"""
+    return t(WHY_LABELS.get(key, key))
 
 
 def _load_state(day: str) -> dict:
@@ -70,45 +96,45 @@ def _review_pending(day: str) -> bool:
 def _needs(day: str, now, cfg) -> tuple[bool, str]:
     ws, we = timeutil.day_window(day, cfg.cutoff_hour)
     if now < ws:
-        return False, "未到窗口"
+        return False, "window_not_open"
     if not _has_data(day):
-        return False, "无采集数据"
+        return False, "no_data"
     target = min(now, we)
     closed = now >= we
     trigger_dt = timeutil.trigger_at(day, cfg.cutoff_hour, int(cfg.get("report.trigger_hour", 21)))
     state = _load_state(day)
 
     if _review_pending(day):
-        return False, "等待审核确认"
+        return False, "review_pending"
 
     if state.get("status") not in report_mod.REPORT_STATUS:
         if not closed and now < trigger_dt:
-            return False, "未到出报时间"
-        return True, "首次生成"
+            return False, "before_trigger"
+        return True, "first"
 
     try:
         covered = timeutil.parse(state.get("coverage_until_iso", ""))
     except Exception:
-        return True, "状态异常"
+        return True, "state_bad"
     if covered >= target:
         st = state.get("status")
         # 输入有变化（迟到 OCR / 补采）：已成功的版本也要重算一版收尾
         if st in ("ok", "empty"):
             if state.get("input_hash") and state.get("input_hash") == report_mod.input_hash(day):
-                return False, "已覆盖"
-            return True, "输入有更新"
+                return False, "covered"
+            return True, "input_changed"
         # 降级版：网络恢复后在限额窗口内自动升级为 AI 版
         if st == "degraded" and report_mod.upgrade_due(state, now, cfg):
-            return True, "降级升级重试"
-        return False, "已覆盖"
+            return True, "degraded_upgrade"
+        return False, "covered"
     if closed:
-        return True, "补终版"
+        return True, WHY_FINAL
     if now < trigger_dt:
-        return False, "未到出报时间"
+        return False, "before_trigger"
     gap_min = float(cfg.get("report.refresh_gap_min", DEFAULT_REFRESH_GAP_MIN))
     if (target - covered).total_seconds() / 60 < gap_min:
-        return False, "已是最新"
-    return True, "增量更新"
+        return False, "latest"
+    return True, "incremental"
 
 
 def pending(cfg, now=None, days: int | None = None) -> list[tuple[str, str]]:
@@ -148,12 +174,12 @@ def run(cfg, log, limit: int = 3) -> int:
 
     if not candidates:
         if log:
-            log.info("tick: 没有需要生成的日报（today=%s）", today)
+            log.info("tick: %s (today=%s)", t("No report to generate"), today)
         return 0
 
     if log:
-        log.info("tick: 待生成 %d 天：%s", len(candidates),
-                 "、".join(f"{d}({w})" for d, w in candidates))
+        log.info("tick: %s", t("{n} day(s) to generate: {items}", n=len(candidates),
+                                items=", ".join(f"{d}({why_text(w)})" for d, w in candidates)))
 
     # 自动弹浏览器只留给终版：窗口已关闭才弹。21:00 首版和晚间断点增量
     # 更新都不弹，免得一晚弹好几遍；一次补多天漏报时也只弹最新那一天，
@@ -161,17 +187,17 @@ def run(cfg, log, limit: int = 3) -> int:
     final_day = _final_day(candidates, now, cfg)
     rc = 0
     for day, why in candidates[:limit]:  # 单次最多补 3 天，避免开机瞬间连跑
-        reason = "catchup" if (day != today or why == "补终版") else "auto"
+        reason = "catchup" if (day != today or why == WHY_FINAL) else "auto"
         try:
             res = report_mod.generate(day, cfg, log, reason=reason, force=False,
                                       open_browser=(day == final_day))
             if log:
-                log.info("tick: %s(%s) -> %s", day, why, res.get("status"))
+                log.info("tick: %s (%s) -> %s", day, why_text(why), res.get("status"))
             if res.get("status") not in ("ok", "skipped", "degraded", "empty", "busy", "nodata",
                                          "awaiting_review"):
                 rc = 1
         except Exception as exc:
             rc = 1
             if log:
-                log.exception("tick: %s 生成失败: %s", day, exc)
+                log.exception("tick: %s failed: %s", day, exc)
     return rc
