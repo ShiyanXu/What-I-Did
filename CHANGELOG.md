@@ -21,6 +21,42 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
+## [v1.2.2] - 2026-11-05
+
+### English
+
+The daily report no longer mistakes reading for writing, and no longer turns other people's
+chat messages into your own conversations.
+
+#### Changed
+
+- **Evidence is graded before any verb is chosen.** A document is only reported as written when
+  the screenshots show an input-method candidate window, text that visibly grew between two
+  moments, or a save/commit action. Everything else is reported as reading, checking or
+  comparing. A section number such as `1.3.1.1` appearing on screen no longer counts as proof
+  that you wrote that section — it only means you were looking at it.
+- **Chat tools count only when you actually sent something.** A conversation list, group
+  history, someone else's message, a pinned doc or an @-mention no longer becomes "discussed X
+  with Y", and no longer feeds highlights or follow-ups. Only your own message bubble, an input
+  box that was cleared, or something in the Sent folder counts.
+- **The narrative states what happened, not how sure the model was.** Evidence caveats moved
+  into the report's own note field, so the summary no longer argues with itself.
+
+### 中文
+
+日报不再把「看」写成「写」，也不再把你没参与的群消息写成你在讨论。
+
+#### 变更
+
+- **先给证据分档，再选动词。** 只有截图里出现输入法候选框、相邻两个时点的文字确实增加、
+  或出现保存/提交动作，才判为在写文档；其余一律记为阅读、核对、比对。屏幕上出现
+  `1.3.1.1` 这样的章节号，只说明你在看这一节，不再当成你写了这一节。
+- **聊天软件只认真正发出去的消息。** 会话列表、群历史、别人的消息、置顶文档、@提醒，
+  都不再被写成「和某人讨论了某事」，也不再进入成果卡与待办。只有自己的消息气泡、
+  被清空的输入框、或「已发送」里的邮件才算。
+- **正文只陈述发生了什么，不解释判定过程。** 证据不足的说明全部收进报告的备注字段，
+  不再让总结一边叙述一边自我辩解。
+
 ## [v1.2.1] - 2026-11-02
 
 ### English
