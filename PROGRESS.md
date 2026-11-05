@@ -2,31 +2,36 @@
 
 > **这是唯一的进度事实来源。** 新会话从这里接续，不要凭记忆或聊天记录猜。
 > 维护规则：每次会话结束前更新本文件；只写事实与下一步，不写过程感想。
-> 最后更新：2026-11-05 16:15
+> 最后更新：2026-11-05 16:30
 
 ## 当前状态
 
+> **这一节刻意不写当前 HEAD。** HEAD 每次提交都会变，把它写进一个会被提交的文件，等于让它
+> 一经提交就过期——本项目已经因此错过三次。当前值一律用下面自查第 1、2 条现查；
+> 只有**已经不动了的**提交号（过去的提交、tag 目标）才写成字面量。
+
 - **版本**：`1.2.2`（`src/gui.py:VERSION`，唯一来源）
-- **仓库**：HEAD `888c30f` = `origin/main`；tag `v1.2.2`（附注标签 `85b0c67`）指向 `1a6d251`
-- **工作区**：**不干净**——本轮文档纠偏共 17 项未提交（16 改 + 1 新增），明细见「进行中」；
-  除此之外没有其他改动
+- **仓库**：HEAD 已推送、与 `origin/main` 一致，工作区干净
+- **tag**：`v1.2.2`（附注标签 `85b0c67`）指向代码提交 `1a6d251`；文档纠偏提交 `227935c` 在它之后，
+  所以 tag 不含这套文档——这是有意的，tag 标记的是产物来源，不是最后的文档状态
 - **已发布**：GitHub Release `v1.2.2`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.2.2>），
   资产 `What-IDid-win64-1.2.2-20261105.zip`（116,130,117 字节 / 1104 条目 / sha256 `36f1d3c4…df1e`，
   与 `release/v1.2.2/SHA256SUMS.txt` 一致）
 - **自测**：`check_privacy` 73/73、`check_boundaries` 27/27（2026-11-05 16:10 实跑确认）；
   DPI 与 GUI 回归**本版未跑**
-- **文档**：`AGENTS.md`、本文件、`agents/` 下 6 份已随 `888c30f` 入库；本轮又做了一轮纠偏（未提交）
+- **文档**：`AGENTS.md`、本文件、`agents/` 下 6 份首次入库于 `888c30f`；两轮「克隆后五问」纠偏在
+  `227935c`；此后只有本文件自身的措辞补正，不再单列提交号
 - **生产实例**：`D:\What-IDid` 跑 v1.2.2，采集由计划任务 `WhatIDid-Recorder` 拉起，心跳正常
-- **唯一未收尾的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 的 `Source commit` 仍写 `1e4a5ed`
-  （推送前 HEAD）+「含未推送改动」，应改为 `1a6d251`；GitHub Release 正文同样还是旧值
+- **未收尾的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit`
+  写的是 `1e4a5ed`，应为 `1a6d251`（tag 实际目标）。本地文件可直接改，网页需人工改。
 
 **自查（不要只信上面的断言，直接跑）**：
 
 ```bash
-git log --oneline -1                 # 应为 888c30f
-git status --short                   # 应只有「进行中」列出的那些文件，不该有别的
-git tag -l "v1.2*"                   # 应含 v1.2.2
-git rev-parse v1.2.2^{commit}        # 应为 1a6d251（不是 888c30f，文档提交在 tag 之后）
+git status --short                              # 必须为空
+git rev-list --left-right --count @{u}...HEAD   # 必须是 "0	0"（不领先也不落后）
+git rev-parse v1.2.2^{commit}                   # 应为 1a6d251，tag 不会移动
+git tag -l "v1.2*"                              # 应含 v1.2.2
 PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_boundaries.py
 ```
 
@@ -43,29 +48,16 @@ PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_b
 - [x] v1.2.2 的 zip 落盘、生产实例替换、push、tag、GitHub Release 全部完成
 - [x] 建立本文件与 `AGENTS.md`、`agents/*`（仓库即事实来源），并入 `888c30f`
 - [x] 1104 用新提示词重出报告（旧版备份 `reports/2026-11-04.json.bak-20261105`，仅本机）
+- [x] **两轮「克隆后五问」文档纠偏**，并入 `227935c`（17 项）。做法：从 GitHub 克隆纯净副本 →
+      全新会话只读它回答五个基本问题 → 按它指出的矛盾逐条核代码再改；改完再造一份「推送后快照」
+      让第二个新会话复查。第一轮查出 11 处，第二轮查出 8 处（含我自己改错的两处）。
+      修的类别：`dev/` 根假设、已过期的进度摘要、计划任务条数、「正式采集不 OCR」、`scripts/*` 的
+      `.build/` 过期路径、写死的回归项数、`publish.py` / `WORKSPACE.md` 的本机引用；
+      另补 `requirements.txt`（9 个包按实测版本钉住）并让 `build_dist.py` 按它安装。
 
 ## 进行中
 
-- [ ] **文档纠偏（两轮，未提交）**。做法：从 GitHub 克隆纯净副本 → 全新会话只读它回答五个基本问题 →
-  按它指出的矛盾逐条核代码再改。第一轮查出 11 处，第二轮复查又查出 8 处（含我自己改错的两处）。
-  待提交的 17 项：
-
-  ```
-  M  AGENTS.md                    M  docs/configuration.md       M  scripts/build_dist.py
-  M  PROGRESS.md                  M  docs/configuration.zh-CN.md M  scripts/fake_llm_server.py
-  M  agents/architecture.md       M  config.default.yaml         M  scripts/gui_regression.py
-  M  agents/environment.md        M  docs/building.md            M  scripts/seed_gui_home.py
-  M  agents/verification.md       M  docs/building.zh-CN.md      M  scripts/verify_dpi.py
-  M  agents/workflow.md           ?? requirements.txt
-  ```
-
-  改了什么：`dev/` 根假设改成仓库根、进度摘要改成已发布、「三条计划任务」改成两条（两处）、
-  「正式采集不 OCR」改成「OCR 只对落盘帧做」（三处）、`scripts/*` 的 `.build/` 过期路径、
-  `publish.py` / `WORKSPACE.md` 标注为本机且给出等价手工步骤、`gui_regression` 去掉写死项数（三处）、
-  `requirements.txt` 落盘并让 `build_dist.py` 按它安装、`docs/building*` 的 `bat` 块 heredoc 改单行、
-  两个脚本的 CRLF 转回 LF。
-- [ ] **提交方式**：改动量已超出「转载 `.new`」的舒适区（17 项）。建议这次直接在提交侧
-  `git add -A` 一次提交，而不是逐个 `.new` 搬运。
+无。工作区干净，没有半成品改动。
 
 ## 已知问题
 
@@ -87,20 +79,22 @@ PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_b
    所以所有改动只能以 `.new` 中转，由 iMac 侧 `mv -f`。
 6. **Windows 侧无 git 凭据**，push / tag / GitHub Release 只能 iMac 侧做。
 7. **同步是手动的**（`git fetch && git reset --mixed`）。推送后不归零，下次改动的 diff 里会混进旧提交。
-8. **本文件依赖人/agent 主动更新**，没有任何自动检查会发现它过期。看到版本号与 `src/gui.py:VERSION`
-   对不上时，先修这里；看到 git 状态段与 `git status` 对不上时，同样先修这里——这一条已经错过两次
-   （一次写「6 项待提交」实际已推送，一次写「工作区干净」实际 15 项没提交）。
+8. **本文件依赖人/agent 主动更新**，没有任何自动检查会发现它过期。已经错过三次：
+   一次写「6 项待提交」而实际已推送、一次写「工作区干净」而实际 15 项没提交、
+   一次写「17 项未提交」而当时刚提交完。**根因是写死当前 HEAD 与未提交项清单**——文件一被提交，
+   这两个值必然变化。现在的做法：状态一律写成不变量 + 自查命令（见「当前状态」开头），
+   字面量只留给已经不动了的提交号。改这一节时先跑自查，别凭上一次的记忆写。
 9. **块清单的「分类」是本地按标题猜的**（含「文档/.md」的标题会被猜成 writing）。
    它只用于聚类，不能作为行为判定依据，prompt 里已明确写死。
-10. **`dist/` 与 v1.2.2 的 zip 构建于本轮改动之前**。本轮只动文档、注释、`scripts/`（不进包）与
-    `build_dist.py`（不进包），唯一进包的是 `config.default.yaml` 里的一行注释——而注释只影响
+10. **`dist/` 与 v1.2.2 的 zip 构建于 `227935c` 之前**。那次提交只动文档、注释、`scripts/`（不进包）
+    与 `build_dist.py`（不进包），唯一进包的是 `config.default.yaml` 里的一行注释——注释只影响
     「首次运行生成 config.yaml」时的可读性，不影响任何行为。所以不重打包：同一版本号换资产会让
     已发布的 sha256 失效，代价大于收益。下一次因代码升版时才自然带上。
 
 ## 下一步
 
-1. 把本轮文档纠偏 + `requirements.txt` 提交推送（一次 commit），并顺手把
-   `release/v1.2.2/RELEASE_NOTES.md` 的 `Source commit` 改成 `1a6d251`、同步改 GitHub Release 正文。
+1. 改 `release/v1.2.2/RELEASE_NOTES.md` 的 `Source commit` 为 `1a6d251`，并同步改 GitHub Release 正文
+   （只能人工改，本地文件改完不影响已发布的 zip 与指纹）。
 2. 跑 `verify_dpi.py` 与 `gui_regression.py`：先 `wid.py pause`（否则测试会污染当天日报），
    `WID_HOME` 必须是 `.tmp_wid*`，跑完 `wid.py resume`，把通过/失败数记进本节。
 3. 观察 2026-11-05 的终版日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成

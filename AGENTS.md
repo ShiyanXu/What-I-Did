@@ -20,7 +20,7 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 | **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 33 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
 | **怎么运行** | `python wid.py` 开界面；`wid.py daemon` 常驻采集；`wid.py report --date YYYY-MM-DD --no-open` 手动出某天报告 | `agents/environment.md` |
 | **怎么验证** | 改任何代码先跑 `check_privacy`（73 项）+ `check_boundaries`（27 项）；发版前 `doctor --full`，必要时 `verify_dpi`（14）/ `gui_regression`（项数随分支浮动，约 41） | `agents/verification.md` |
-| **现在进度如何** | v1.2.2 已发布（tag 与 GitHub Release 都在），源码 `888c30f` = `origin/main`；工作区有本轮文档改动未提交（明细在 `PROGRESS.md`）；DPI 与 GUI 回归**本版未重跑** | `PROGRESS.md` |
+| **现在进度如何** | v1.2.2 已发布（tag 与 GitHub Release 都在），HEAD 已推送、工作区干净；DPI 与 GUI 回归**本版未重跑** | `PROGRESS.md` |
 
 ## 三条最常用命令
 
