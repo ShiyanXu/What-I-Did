@@ -1,0 +1,28 @@
+# What-IDid — 依赖版本基线
+#
+# 用途：让「在另一台机器上装出同样的环境」成为可能。此前仓库只有文档里的包名、没有版本，
+#       scripts/build_dist.py 从镜像装最新版，同一份源码在不同月份装出的包并不相同。
+#
+# 版本取自 v1.2.2 构建所用的 .build/venv 实际安装结果（Windows x64 / CPython 3.10）。
+# 升级任何一个都要跑一遍：check_privacy + check_boundaries + 重出一天真实日报 + 重建 dist。
+#
+# 安装：
+#   pip install -r requirements.txt
+#
+# 注意：运行时依赖只有前六个，这是硬约束（见 AGENTS.md 第 2 条）。rapidocr / onnxruntime
+#       只在内置 OCR 兜底时才需要，pyinstaller 只在构建时用。
+
+# ---- 运行时（必需，六个，别再加）----
+Pillow==12.3.0
+numpy==2.2.6
+requests==2.34.2
+Jinja2==3.1.6
+PyYAML==6.0.3
+psutil==7.2.2
+
+# ---- 内置 OCR 兜底（可选；没有 Umi-OCR 时才需要，约 30 MB 模型）----
+rapidocr==3.10.0
+onnxruntime==1.23.2
+
+# ---- 构建（只在 scripts/build_dist.py 用）----
+pyinstaller==6.22.3

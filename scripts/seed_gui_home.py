@@ -1,6 +1,6 @@
 """开发用：把 GUI 回归需要的样本环境一次准备好。
 
-    python .build/seed_gui_home.py .tmp_wid_guiN
+    python scripts/seed_gui_home.py .tmp_wid_guiN
 
 做四件事：初始化配置 → 造两天样本 → 打开审核模式并指向本地假模型 → 制造一份待审预览。
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GUI_PY = sys.executable
-EXE = ROOT / ".build" / "stage" / "What-IDid" / "What-IDid.exe"
+EXE = ROOT / "dist" / "What-IDid" / "What-IDid.exe"
 DAYS = ("2026-10-18", "2026-10-19")
 
 
@@ -27,7 +27,7 @@ def run(args, home: Path, quiet: bool = True) -> subprocess.CompletedProcess:
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("用法：python .build/seed_gui_home.py <临时目录>")
+        print("用法：python scripts/seed_gui_home.py <临时目录>")
         return 2
     home = Path(sys.argv[1]).resolve()
     if not home.name.startswith(".tmp_wid"):
@@ -68,7 +68,7 @@ def main() -> int:
         print(r.stdout, r.stderr)
         return 1
     print("      待审预览已生成")
-    print(f"\n完成。接下来：\n  WID_HOME={home} {GUI_PY} .build/gui_regression.py")
+    print(f"\n完成。接下来：\n  WID_HOME={home} {GUI_PY} scripts/gui_regression.py")
     return 0
 
 

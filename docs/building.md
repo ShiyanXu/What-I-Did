@@ -19,8 +19,10 @@ No database, no web framework, no scheduling library — scheduling uses Windows
 ## Running from source
 
 ```bat
-python -m pip install Pillow numpy requests Jinja2 PyYAML psutil
-python -m pip install rapidocr onnxruntime      :: only needed for the built-in OCR
+python -m pip install -r requirements.txt            :: pinned versions, recommended
+:: or, runtime only, without OCR:
+:: python -m pip install Pillow numpy requests Jinja2 PyYAML psutil
+python -m pip install rapidocr onnxruntime           :: only needed for the built-in OCR
 
 python wid.py setup
 python wid.py doctor
@@ -28,6 +30,9 @@ python wid.py collect --once                    :: take one sample to see it wor
 python wid.py start                             :: run in the background
 python wid.py report --date 2026-10-19 --force
 ```
+
+`requirements.txt` records the versions v1.2.2 was built with; installing the bare package names
+gives you whatever is newest and a different combination.
 
 Use `python wid.py daemon` to debug the resident logic; it takes over the current console. `wid.py` exposes the same subcommands as the packaged exe.
 
@@ -47,7 +52,7 @@ All of them live under `scripts/`, none of them touch the network or your real r
 | `check_privacy.py` | 73 privacy and invalid-config checks: forged credential injection, zero requests with outbound off, pause/lock screen/blocklists, re-blocking after narrowing the blocklist, OCR address validation, no capture when cropping fails, build protection | `python scripts\check_privacy.py` |
 | `check_boundaries.py` | 27 boundary and error-path checks: empty keyword, out-of-range date, corrupt JSON, empty week, duplicate manual entry, invalid time | Needs samples first; `python scripts\check_boundaries.py` |
 | `verify_dpi.py` | 14 DPI and multi-monitor checks: screenshot size = window rectangle, cross-monitor origin offset, full screen = virtual desktop, refuse to write when coordinate spaces disagree | `python scripts\verify_dpi.py` |
-| `gui_regression.py` | 41 click-level UI checks: switching between the four pages, manual entry validation, forget confirmation, review send/discard | Prepare the environment with `seed_gui_home.py` first |
+| `gui_regression.py` | About 41 click-level UI checks (the count varies with branches): switching between the four pages, manual entry validation, forget confirmation, review send/discard | Build `dist/` first, then prepare the environment with `seed_gui_home.py` |
 | `seed_gui_home.py` | Prepares the GUI regression environment in one step (may only write to `.tmp_wid*`) | `python scripts\seed_gui_home.py .tmp_wid_gui` |
 | `fake_llm_server.py` | Local OpenAI-compatible fake model; the `block_id` / `seg_id` it returns are scraped live from the request body | `python scripts\fake_llm_server.py 8799` |
 
@@ -103,15 +108,12 @@ To update a portable directory that holds personal data, stop capture and the UI
 `MODULES` in `build.spec` is a **hand-written list**. PyInstaller's static analysis cannot see lazy imports, and a missing entry means an immediate `ImportError` in the packaged build while source mode works perfectly. After adding `src/*.py`:
 
 ```bat
-:: check that src modules and MODULES agree
-python - <<"EOF"
-import pathlib, re
-src = {p.stem for p in pathlib.Path("src").glob("*.py")} - {"__init__"}
-spec = pathlib.Path("build.spec").read_text(encoding="utf-8")
-mods = set(re.findall(r'"([a-z_]+)"', spec.split("MODULES")[1].split("]")[0]))
-print("缺:", sorted(src - mods), " 多余:", sorted(mods - src))
-EOF
+:: check that src modules and MODULES agree (one line, works in cmd / PowerShell / bash)
+:: i18n* is picked up by a glob in build.spec and "refs" is the package itself, so both are excluded
+python -c "import pathlib,re;q=chr(34);s={p.stem for p in pathlib.Path('src').glob('*.py') if not p.stem.startswith('i18n')}-{'__init__'};t=pathlib.Path('build.spec').read_text(encoding='utf-8');m=set(re.findall(q+'([a-z_]+)'+q,t.split('MODULES')[1].split(']')[0]))-{'refs'};print('missing:',sorted(s-m),' extra:',sorted(m-s))"
 ```
+
+Both lists should be empty on a healthy tree.
 
 Adding a config key means changing two places at once: `config.default.yaml` (for humans) and `DEFAULTS` in `src/config.py` (which takes part in type validation and default merging). Changing only the former skips validation, and the string `"false"` gets treated as true.
 

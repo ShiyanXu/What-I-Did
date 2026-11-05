@@ -66,7 +66,7 @@
 
 ### 界面
 `gui.py`（tkinter 四页：概览/日报/设置/诊断）、`tray.py`（ctypes 调 `Shell_NotifyIcon`）、
-`control.py`（启停采集）、`status.py`、`doctor.py`、`autostart.py`（注册三条计划任务）。
+`control.py`（启停采集）、`status.py`、`doctor.py`、`autostart.py`（注册两条计划任务：采集 + 出报）。
 `i18n.py` + `i18n_zh_cn.py`：英文是源语言，中文是词条表。
 
 ## 三、一天的数据流

@@ -98,7 +98,7 @@ ui:
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
-| `store_screenshots` | `true` | 设为 `false` 时不落图，正式采集也不 OCR，只留脱敏标题 |
+| `store_screenshots` | `true` | 设为 `false` 时不落图，也就没有 OCR（OCR 只对落盘的帧做），只留脱敏标题 |
 | `capture_scope` | `active_window` | `active_window` / `all_screens`。窗口不可用时跳过，**不回退全屏** |
 | `allow_llm` | `true` | `false` 禁止一切模型请求（含连接测试），本地记录与时间线日报照常 |
 | `blocked_apps` | 密码管理器若干 | 精确进程名，不区分大小写。只留匿名状态，不存应用、标题、图像与 OCR |

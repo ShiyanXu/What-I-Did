@@ -66,7 +66,7 @@ ocr:
   http_url: "http://127.0.0.1:1224/api/ocr" # 仅回环地址；不走代理、不跟随重定向
 
 privacy:
-  store_screenshots: true    # false 不落图；当前正式采集也不 OCR，只留脱敏标题
+  store_screenshots: true    # false 不落图，也就没有 OCR（OCR 只对落盘的帧做），只留脱敏标题
   capture_scope: active_window # active_window / all_screens；窗口失败不回退全屏
   allow_llm: true            # false 禁止所有模型请求（含连接测试），保留本地时间线
   blocked_apps:              # 精确进程名，不分大小写；仅留匿名状态，无应用/标题/图/OCR

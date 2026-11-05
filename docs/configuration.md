@@ -98,7 +98,7 @@ ui:
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `store_screenshots` | `true` | When `false`, no images are written and normal capture does no OCR either; only redacted titles remain |
+| `store_screenshots` | `true` | When `false`, no images are written, and therefore no OCR runs either (OCR only works on frames that were saved); only redacted titles remain |
 | `capture_scope` | `active_window` | `active_window` / `all_screens`. Skipped when the window is unavailable, **never falling back to the full screen** |
 | `allow_llm` | `true` | `false` blocks every model request (including the connection test); local recording and timeline reports carry on |
 | `blocked_apps` | a set of password managers | Exact process names, case-insensitive. Only an anonymous state is kept: no app, title, image or OCR |

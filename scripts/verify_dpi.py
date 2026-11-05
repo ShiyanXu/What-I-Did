@@ -1,6 +1,6 @@
 """开发用：DPI / 多屏 采集坐标一致性实测。
 
-    WID_HOME=.tmp_wid_pack "C:/.../Python310/python.exe" .build/verify_dpi.py
+    WID_HOME=.tmp_wid_pack "C:/.../Python310/python.exe" scripts/verify_dpi.py
 
 做法：自己开一个已知尺寸的窗口当靶子（不截用户正在看的画面），
 按采集器真实路径抓一次，再比对「抓到的像素尺寸」和「窗口矩形」。

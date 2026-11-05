@@ -1,7 +1,7 @@
 """开发用：点击级 GUI 回归（tkinter，用 event_generate 真发按键/点击事件）。
 
     WID_HOME=E:/Self/Project/What-I-Did/.tmp_wid_gui \
-        "C:/.../Python310/python.exe" .build/gui_regression.py
+        "C:/.../Python310/python.exe" scripts/gui_regression.py
 
 覆盖：导航点击、悬停态、日报行选择、补录（成功/格式错）、遗忘（取消/确认）、
 审核视图（丢弃/审核并发送）、刷新按钮、F5、关窗口。

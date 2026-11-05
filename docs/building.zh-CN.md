@@ -19,8 +19,10 @@
 ## 源码运行
 
 ```bat
-python -m pip install Pillow numpy requests Jinja2 PyYAML psutil
-python -m pip install rapidocr onnxruntime      :: 想用内置 OCR 才需要
+python -m pip install -r requirements.txt            :: 钉住的版本，推荐
+:: 或者只要运行时不装 OCR：
+:: python -m pip install Pillow numpy requests Jinja2 PyYAML psutil
+python -m pip install rapidocr onnxruntime           :: 想用内置 OCR 才需要
 
 python wid.py setup
 python wid.py doctor
@@ -28,6 +30,8 @@ python wid.py collect --once                    :: 采一次看看
 python wid.py start                             :: 后台常驻
 python wid.py report --date 2026-10-19 --force
 ```
+
+`requirements.txt` 是构建 v1.2.2 时的实际版本，直接用包名装最新版会得到不同的组合。
 
 调试常驻逻辑用 `python wid.py daemon`，它会占住当前控制台。`wid.py` 与打包后的 exe 是同一套子命令。
 
@@ -47,7 +51,7 @@ set WID_HOME=%CD%\.tmp_wid_dev
 | `check_privacy.py` | 隐私与配置失效 73 项：伪造凭据注入、关闭外发后零请求、暂停/锁屏/名单、名单收紧后重分块、OCR 地址校验、裁剪失败不抓屏、构建保护 | `python scripts\check_privacy.py` |
 | `check_boundaries.py` | 边界与异常路径 27 项：空关键词、日期越界、损坏 JSON、空周、重复补录、非法时间 | 需先有样本；`python scripts\check_boundaries.py` |
 | `verify_dpi.py` | DPI 与多屏 14 项：抓图尺寸 = 窗口矩形、跨屏原点偏移、全屏 = 虚拟桌面、坐标不一致时拒绝落盘 | `python scripts\verify_dpi.py` |
-| `gui_regression.py` | 点击级界面 41 项：四页切换、补录校验、遗忘确认、审核发送/丢弃 | 先用 `seed_gui_home.py` 准备环境 |
+| `gui_regression.py` | 点击级界面检查约 41 项（随分支浮动）：四页切换、补录校验、遗忘确认、审核发送/丢弃 | 先构建出 `dist/`，再用 `seed_gui_home.py` 准备环境 |
 | `seed_gui_home.py` | 一键准备 GUI 回归环境（只允许写 `.tmp_wid*`） | `python scripts\seed_gui_home.py .tmp_wid_gui` |
 | `fake_llm_server.py` | 本地 OpenAI 兼容假模型，回包的 `block_id` / `seg_id` 从请求正文现抓 | `python scripts\fake_llm_server.py 8799` |
 
@@ -103,15 +107,12 @@ dist\What-IDid\
 `build.spec` 里的 `MODULES` 是**手写清单**。PyInstaller 的静态分析看不到按需导入的模块，漏写会在打包版直接 `ImportError`，而源码模式完全正常。新增 `src/*.py` 后：
 
 ```bat
-:: 比对 src 模块与 MODULES 是否一致
-python - <<"EOF"
-import pathlib, re
-src = {p.stem for p in pathlib.Path("src").glob("*.py")} - {"__init__"}
-spec = pathlib.Path("build.spec").read_text(encoding="utf-8")
-mods = set(re.findall(r'"([a-z_]+)"', spec.split("MODULES")[1].split("]")[0]))
-print("缺:", sorted(src - mods), " 多余:", sorted(mods - src))
-EOF
+:: 比对 src 模块与 MODULES 是否一致（单行，cmd / PowerShell / bash 都能跑）
+:: i18n* 由 build.spec 里的 glob 收集，"refs" 是包本身，两者都排除
+python -c "import pathlib,re;q=chr(34);s={p.stem for p in pathlib.Path('src').glob('*.py') if not p.stem.startswith('i18n')}-{'__init__'};t=pathlib.Path('build.spec').read_text(encoding='utf-8');m=set(re.findall(q+'([a-z_]+)'+q,t.split('MODULES')[1].split(']')[0]))-{'refs'};print('missing:',sorted(s-m),' extra:',sorted(m-s))"
 ```
+
+健康树上两个列表都应为空。
 
 新增配置项时要同时改两处：`config.default.yaml`（给人看）和 `src/config.py` 的 `DEFAULTS`（参与类型校验与默认合并）。只改前者不会进校验，字符串 `"false"` 会被当成真值。
 

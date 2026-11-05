@@ -1,6 +1,6 @@
 """开发用假模型服务：模拟 OpenAI 兼容接口，验证「冻结版能不能真的把整条链路跑完」。
 
-    python .build/fake_llm_server.py            # 监听 127.0.0.1:8799
+    python scripts/fake_llm_server.py           # 监听 127.0.0.1:8799
     # 然后把 config.llm.base_url 指到 http://127.0.0.1:8799/v1
 
 回包里的 block_id / seg_id 全部从请求正文里现抓，保证校验链和真实调用走同一套逻辑。

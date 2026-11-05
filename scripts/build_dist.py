@@ -150,11 +150,23 @@ def ensure_venv(fresh: bool) -> Path:
     return py
 
 
+def _requirements() -> list[str]:
+    """优先按 requirements.txt 的钉住版本装；缺失时退回裸包名（旧行为）。"""
+    req = ROOT / "requirements.txt"
+    if not req.exists():
+        return [*PKGS, "pyinstaller"]
+    pkgs: list[str] = []
+    for line in req.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line and not line.startswith("-"):
+            pkgs.append(line)
+    return pkgs or [*PKGS, "pyinstaller"]
+
+
 def pip_install(py: Path) -> None:
     print("[2/4] 安装构建依赖 …")
     subprocess.run([str(py), "-m", "pip", "install", "-q", "--upgrade", "pip", "-i", MIRROR], check=False)
-    subprocess.run([str(py), "-m", "pip", "install", "-q", "-i", MIRROR, *PKGS], check=True)
-    subprocess.run([str(py), "-m", "pip", "install", "-q", "-i", MIRROR, "pyinstaller"], check=True)
+    subprocess.run([str(py), "-m", "pip", "install", "-q", "-i", MIRROR, *_requirements()], check=True)
 
 
 def move_aside() -> Path | None:

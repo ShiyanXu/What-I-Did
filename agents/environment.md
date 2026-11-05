@@ -11,7 +11,11 @@ C:\Users\xushiyan\AppData\Local\Programs\Python\Python310\python.exe   ← GUI�
 ```
 
 PATH 里的 `python` 是托管版 3.13，**没有 tkinter**，跑 `wid.py gui` 会直接报错。
-打包时用的虚拟环境是 `dev/.build/venv`（由 `scripts/build_dist.py` 管理，不要手动装东西进去）。
+打包时用的虚拟环境是 `.build/venv`（仓库根下，由 `scripts/build_dist.py` 管理，不要手动装东西进去）。
+
+依赖版本基线见 `requirements.txt`：六个运行时包（Pillow / numpy / requests / Jinja2 / PyYAML / psutil）
++ 可选的内置 OCR 两个（rapidocr / onnxruntime）+ 构建用的 pyinstaller。`build_dist.py` 从镜像装的是
+**最新版**，所以真正复现构建时要按 `requirements.txt` 里的版本装，别信「装最新就行」。
 
 > README 面向通用用户写的是「Python 3.10+」，那是发布包的安装要求；**在这台开发机上只有上面
 > 那个 3.10 可用**，两者不矛盾。
@@ -38,18 +42,33 @@ PATH 里的 `python` 是托管版 3.13，**没有 tkinter**，跑 `wid.py gui` �
 要点：整屏识别质量差，**必须裁活动窗口原生分辨率再识别**；RapidOCR 默认往 stderr 打 INFO，
 构造前把 logger 压到 WARNING。
 
-## 四、三条计划任务（`autostart.py`）
+## 四、两条计划任务（`autostart.py`）
 
 | 任务名 | 作用 | 触发 |
 |---|---|---|
 | `WhatIDid-Recorder` | 常驻采集 | 登录时启动，`ExecutionTimeLimit=PT0S`（永不超时） |
 | `WhatIDid-Report` | 出报 | 21:00 起每 20 分钟重复 2 小时；登录 +3 分钟补跑；次日 04:05 终版 |
-| `WhatIDid-LaunchGui` | 会话外拉起界面 | 无触发器、无参数，**别删** |
 
+- 只有这两条由代码创建（`src/autostart.py` 的 `TASK_NAME` / `REPORT_TASK_NAME`）。公开文档
+  `docs/architecture.md` 写「最多注册两个」与此一致。
+- **`WhatIDid-LaunchGui` 不在代码里**：它是所有者机器上手工建的一条空任务（无触发器、无参数，
+  目的只是 `Start-ScheduledTask` 能拉起界面），`autostart.py install/uninstall/status` 都不管它。
+  克隆里没有这条任务，也不该有——真要复现，按本节末尾的命令手工建，别指望代码给你。
 - XML 模板写死在 `autostart.py`，改 `report.trigger_hour` 必须重装任务（钟点写进 XML）。
 - 必须用 `InteractiveToken`。用「不管用户是否登录」会落到 Session 0，**截图全黑**。
 - 注册走双路：先 `Register-ScheduledTask -Xml`（PowerShell `-EncodedCommand`，先剥 `<?xml?>`），
   失败退 `schtasks`。`schtasks.exe` 在程序黑名单时 `subprocess.run` 抛的是 `OSError` 而非返回码。
+
+<details>
+<summary>手工建 `WhatIDid-LaunchGui`（仅所有者机器的补救手段）</summary>
+
+```powershell
+$a = New-ScheduledTaskAction -Execute "D:\What-IDid\What-IDid.exe"
+Register-ScheduledTask -TaskName WhatIDid-LaunchGui -Action $a -Force
+```
+
+不要给它加触发器：它被设计成「只在需要时手动 Start」的一次性入口。
+</details>
 
 ## 五、在工具会话里启动进程
 
