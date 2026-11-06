@@ -2,7 +2,7 @@
 
 > **这是唯一的进度事实来源。** 新会话从这里接续，不要凭记忆或聊天记录猜。
 > 维护规则：每次会话结束前更新本文件；只写事实与下一步，不写过程感想。
-> 最后更新：2026-11-06 10:42
+> 最后更新：2026-11-06 14:14
 
 ## 当前状态
 
@@ -10,28 +10,27 @@
 > 一经提交就过期——本项目已经因此错过三次。当前值一律用下面自查第 1、2 条现查；
 > 只有**已经不动了的**提交号（过去的提交、tag 目标）才写成字面量。
 
-- **版本**：`1.3.0`（`src/gui.py:VERSION`，唯一来源）
+- **版本**：`1.3.1`（`src/gui.py:VERSION`，唯一来源）
 - **仓库**：HEAD 已推送、与 `origin/main` 一致。**工作区是否干净不写在这里**——本文件与改动一起提交，
   写死「干净」立刻过期；一律现跑 `git status --short` 判断，把它的输出当唯一依据。
-- **tag**：`v1.2.2`（附注标签 `85b0c67`）指向代码提交 `1a6d251`；文档纠偏提交 `227935c` 在它之后，
-  所以 tag 不含这套文档——这是有意的，tag 标记的是产物来源，不是最后的文档状态。
-  `v1.3.0`（附注标签）指向 `753084c` 并已推送；此后又补了 CHANGELOG 与本节的状态修正，
-  同样**不在 tag 内**——沿用 v1.2.2 的做法，tag 只标记产物来源。
-- **v1.3.0 状态**：**已发布**。代码入库 `753084c`、tag 同名、GitHub Release 2026-11-06 10:35 发布；
-  产物在 `release/v1.3.0/`。
-- **已发布**：GitHub Release `v1.3.0`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.3.0>），
-  资产 `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / 1106 条目 / sha256 `297b73b1…95c2`，
-  与 `release/v1.3.0/SHA256SUMS.txt` 一致；GitHub 侧记录的 digest 与本地逐位相同）。
-  上一版 `v1.2.2` 的资产是 `What-IDid-win64-1.2.2-20261105.zip`（116,130,117 字节）
-- **自测**：`scripts/harness.py check` 全绿（2026-11-06 10:25 实跑，`exit_code=0`）——
+- **tag**：`v1.2.2`（`85b0c67`）→ `1a6d251`、`v1.3.0`（`0f89c19`）→ `753084c`、`v1.3.1`（`4e4c67d`）
+  → `092b7c4`，三个附注标签都已推送。tag 只标记**产物来源**，不标记最后的文档状态：
+  `v1.3.0` 之后还有 CHANGELOG 与状态修正（`764d2c2`），这些**不在 tag 内**——有意的取舍，不是遗漏。
+- **v1.3.1 状态**：**已发布**。代码入库 `092b7c4`、tag 同名、GitHub Release 2026-11-06 14:10 发布；
+  产物在 `release/v1.3.1/`，生产实例已换成这一版。
+- **已发布**：GitHub Release `v1.3.1`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.3.1>），
+  资产 `What-IDid-win64-1.3.1-20261106.zip`（116,985,077 字节 / 1106 条目 / sha256 `aa85acf6…1d05`，
+  与 `release/v1.3.1/SHA256SUMS.txt` 一致；GitHub 侧 `digest` 字段与本地逐位相同）。
+  上一版 `v1.3.0` 的资产是 `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / `297b73b1…95c2`）
+- **自测**：`scripts/harness.py check` 全绿（2026-11-06 14:11 实跑，`exit_code=0`）——
   它一次跑完静态校验、Harness 自测、隐私检查、隔离 E2E；**项数随分支浮动，以命令输出为准，
   本文件不写死数字**（同一天就有过一次 104→110 的增长）。
   DPI 与 GUI 回归 2026-11-06 首次实跑并全绿：`verify_dpi.py` 14/14、`gui_regression.py` 41/41；
-  `gui-001` 已由 `harness.py verify` 登记 passing，证据在 `feature_list.json`。
+  `harness.py status` 当前 6/6 `passing`、`blocked` / `in_progress` 归零（14:11 实查）。
 - **文档**：`AGENTS.md`、本文件、`agents/` 下专题首次入库于 `888c30f`；两轮「克隆后五问」纠偏在
-  `227935c`；此后只有本文件自身的措辞补正，不再单列提交号
-- **生产实例**：`D:\What-IDid` 已换 v1.3.0（历史数据保留），采集由计划任务 `WhatIDid-Recorder`
-  拉起，心跳正常
+  `227935c`；`07fe7f3` 把仓库地图移出入口文件（新建 `agents/layout.md`，入口从 127 行降到 97 行）
+- **生产实例**：`D:\What-IDid` 已换 v1.3.1（exe md5 `5ae8148c…`、`_internal` 1104 文件、
+  `doctor --full` 18 项全绿），历史数据原地保留；采集由计划任务 `WhatIDid-Recorder` 拉起，心跳正常
 - **已核对的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit`
   都是 `1a6d251`（tag 实际目标），两侧已对齐。本文件此前记成 `1e4a5ed`——那是产物生成时的 dev HEAD，
   Release 正文在 2026-11-05 16:33 已改好，只是本文件没跟上；**属本文件的过期断言，不是发布问题**。
@@ -49,7 +48,8 @@ git status --short                              # 必须为空
 git rev-list --left-right --count @{u}...HEAD   # 必须是 "0	0"（不领先也不落后）
 git rev-parse v1.2.2^{commit}                   # 应为 1a6d251，tag 不会移动
 git rev-parse v1.3.0^{commit}                   # 应为 753084c，tag 不会移动
-git tag -l "v1.3*"                              # 应含 v1.3.0
+git rev-parse v1.3.1^{commit}                   # 应为 092b7c4，tag 不会移动
+git tag -l "v1.3*"                              # 应含 v1.3.0 与 v1.3.1（本机缺 tag 时先 git fetch --tags）
 PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态+Harness+隐私+隔离E2E
 ```
 
@@ -87,6 +87,12 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
 - [x] **v1.3.0 入库与发布**（2026-11-06）：`7f4e02c`（Harness）、`753084c`（v1.3.0），
       附注标签 `v1.3.0` 已推送；`764d2c2` 补 CHANGELOG 与状态修正（不在 tag 内，沿用 v1.2.2 的取舍）。
       GitHub Release 于 10:35 发布，资产与本地 sha256 一致。
+- [x] **v1.3.1 入库与发布**（2026-11-06）：`07fe7f3`（仓库地图移出入口）、`2ac33c9`（Harness 证据去本机路径）、
+      `60cc91e`（操作按钮独占一行 + `gui-001` 登记）、`092b7c4`（版本号与 CHANGELOG）；附注标签 `v1.3.1` 已推送。
+      Release 于 14:10 发布，资产与本地 sha256 一致（GitHub `digest` 逐位相同）。
+      修的是真 bug：`badge_box` 实际 520 宽、内容需 677 宽，pack 把末位「审核待发内容」压成 1×1，
+      `winfo_ismapped()` 为 0——只看得见「找不到按钮」，看不见「按钮在但点不到」。
+      回归断言因此从「找得到」改成「看得到」，`find_op()` 统一在 `page.ops_row` 里找并断言可见。
 
 ## 进行中
 
@@ -126,7 +132,10 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
 9. **`v1.3.0` 的 tag 里少两条 CHANGELOG 说明**：tag 指向 `753084c`，其 CHANGELOG 标题是
     `2026-11-05` 且没有「旧 config.yaml 照旧可用」「内置 SQLite 组件」两条；这两条是 tag 之后
     的文档提交 `764d2c2` 补上的，已写进 GitHub Release 正文。**tag 已随 Release 发布，不再移动**——
-    移动一个已发布 Release 的 tag，代价大于「checkout 后 CHANGELOG 少两行」。下一版自然带上。
+    移动一个已发布 Release 的 tag，代价大于「checkout 后 CHANGELOG 少两行」。
+    **`v1.3.1` 的 tag 已带上完整版本**：v1.3.0 段落日期是 `2026-11-06`，两条说明中英俱全
+    （`git show 092b7c4:CHANGELOG.md` 可验），所以此后从最新 tag checkout 不再缺内容；
+    残留的只有 `v1.3.0` 那个 tag 自身。
 
 ## 下一步
 
