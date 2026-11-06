@@ -227,6 +227,13 @@ class HarnessTests(unittest.TestCase):
         for item in evidence["commands"]:
             self.assertTrue((self.root / item["log_path"]).is_file())
 
+        # 证据会随 feature_list.json 进仓库，必须存占位符而不是本机绝对路径。
+        self.assertEqual(
+            evidence["commands"][0]["command"], ["{python}", "-c", "print('first ok')"]
+        )
+        self.assertEqual(evidence["commands"][1]["command"][-1], "{root}")
+        self.assertNotIn(sys.executable, json.dumps(evidence, ensure_ascii=False))
+
     def test_16_passing_is_irreversible(self) -> None:
         self.document["features"] = [make_feature(
             "f1", status="passing", evidence=[{"summary": "历史通过证据"}]

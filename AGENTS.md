@@ -27,7 +27,7 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 Python 必须是 **3.10 那个**（PATH 里的托管版 3.13 没有 tkinter）：
 
 ```bash
-PY=C:/Users/xushiyan/AppData/Local/Programs/Python/Python310/python.exe   # 换成你本机带 tkinter 的 3.10
+PY=C:/Users/<你的用户名>/AppData/Local/Programs/Python/Python310/python.exe   # 换成你本机带 tkinter 的 3.10
 $PY scripts/harness.py check                  # Harness + 隐私 + 隔离 E2E（项数以输出为准）
 $PY wid.py doctor --full                      # 环境与链路自检
 $PY scripts/check_privacy.py                  # 只跑隐私（不需样本、不联网）

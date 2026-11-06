@@ -378,6 +378,26 @@ def _render_command(command: Sequence[str], root: Path) -> list[str]:
     ]
 
 
+def _compact_command(command: Sequence[str], root: Path) -> list[str]:
+    """把渲染后的 argv 折回占位符，用于写进会提交的证据。
+
+    证据会随 `feature_list.json` 进仓库。绝对路径里带着用户名与解释器位置：
+    换台机器读是噪声，公开仓库里是泄露，也让人误以为验证命令绑死在某一个解释器上。
+    存占位符，回放时再由 `_render_command` 展开。
+    """
+    executable = sys.executable or ""
+    root_text = str(root)
+    compacted: list[str] = []
+    for part in command:
+        if executable and part == executable:
+            compacted.append("{python}")
+            continue
+        if executable:
+            part = part.replace(executable, "{python}")
+        compacted.append(part.replace(root_text, "{root}") if root_text else part)
+    return compacted
+
+
 def _write_command_log(
     path: Path,
     command: Sequence[str],
@@ -641,7 +661,7 @@ def _verify(root: Path, feature_id: str, trace: Trace, parent_span_id: str) -> N
         "recorded_at": _utc_now(),
         "commands": [
             {
-                "command": result.command,
+                "command": _compact_command(result.command, root),
                 "exit_code": result.exit_code,
                 "duration_ms": round(result.duration_ms, 3),
                 "log_path": result.log_path,

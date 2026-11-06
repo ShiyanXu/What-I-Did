@@ -17,7 +17,7 @@
 ## 二、命令与期望
 
 ```bash
-PY=C:/Users/xushiyan/AppData/Local/Programs/Python/Python310/python.exe
+PY=C:/Users/<你的用户名>/AppData/Local/Programs/Python/Python310/python.exe
 
 $PY scripts/harness.py check        # 期望：Harness + 隐私 + 隔离 E2E 全 ok（E2E 自带临时 WID_HOME）
 $PY scripts/check_privacy.py        # 期望：全部 ok，0 failed；项数以当次输出为准

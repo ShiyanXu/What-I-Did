@@ -28,7 +28,7 @@ PY=/path/to/python3.10 ./init.sh              # 依赖 + 完整 Harness 检查 +
 PY=/path/to/python3.10; "$PY" scripts/harness.py status
 ```
 
-所有者机器可用 `SKIP_INSTALL=1 PY=C:/Users/xushiyan/AppData/Local/Programs/Python/Python310/python.exe ./init.sh` 跳过重复安装。任何机器都可设 `RUN_START_COMMAND=1` 让脚本最后启动界面。
+所有者机器可用 `SKIP_INSTALL=1 PY=C:/Users/<你的用户名>/AppData/Local/Programs/Python/Python310/python.exe ./init.sh` 跳过重复安装。任何机器都可设 `RUN_START_COMMAND=1` 让脚本最后启动界面。
 
 随后：
 

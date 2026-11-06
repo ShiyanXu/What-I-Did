@@ -7,7 +7,7 @@
 **只有一个是可用的**：
 
 ```
-C:\Users\xushiyan\AppData\Local\Programs\Python\Python310\python.exe   ← GUI、打包、自测都用它
+C:\Users\<你的用户名>\AppData\Local\Programs\Python\Python310\python.exe   ← GUI、打包、自测都用它
 ```
 
 PATH 里的 `python` 是托管版 3.13，**没有 tkinter**，跑 `wid.py gui` 会直接报错。

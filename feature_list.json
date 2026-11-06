@@ -38,7 +38,7 @@
           "commands": [
             {
               "command": [
-                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "{python}",
                 "scripts/check_privacy.py"
               ],
               "exit_code": 0,
@@ -78,7 +78,7 @@
           "commands": [
             {
               "command": [
-                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "{python}",
                 "scripts/harness.py",
                 "e2e"
               ],
@@ -117,7 +117,7 @@
           "commands": [
             {
               "command": [
-                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "{python}",
                 "scripts/check_privacy.py"
               ],
               "exit_code": 0,
@@ -158,7 +158,7 @@
           "commands": [
             {
               "command": [
-                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "{python}",
                 "scripts/check_harness.py"
               ],
               "exit_code": 0,
@@ -199,7 +199,7 @@
           "commands": [
             {
               "command": [
-                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "{python}",
                 "scripts/check_harness.py"
               ],
               "exit_code": 0,
