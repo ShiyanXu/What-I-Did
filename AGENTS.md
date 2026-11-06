@@ -20,7 +20,7 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 | **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 34 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
 | **怎么运行** | `python wid.py` 开界面；`wid.py daemon` 常驻采集；`wid.py report --date YYYY-MM-DD --no-open` 手动出某天报告 | `agents/environment.md` |
 | **怎么验证** | 先跑 `scripts/harness.py check`（Harness 自测 + 隐私 + 隔离 E2E）；发版前 `doctor --full`，必要时按改动加跑 DPI / GUI 回归 | `agents/harness.md`、`agents/verification.md` |
-| **现在进度如何** | v1.2.2 已发布；**v1.3.0 已入库并打 tag（`753084c`），GitHub Release 待建** | `PROGRESS.md` |
+| **现在进度如何** | v1.3.0 已发布（tag `753084c`，Release 资产 1106 条目）；`gui-001` 仍 blocked | `PROGRESS.md` |
 
 ## 常用命令
 

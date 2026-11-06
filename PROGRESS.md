@@ -2,7 +2,7 @@
 
 > **这是唯一的进度事实来源。** 新会话从这里接续，不要凭记忆或聊天记录猜。
 > 维护规则：每次会话结束前更新本文件；只写事实与下一步，不写过程感想。
-> 最后更新：2026-11-06 10:30
+> 最后更新：2026-11-06 10:42
 
 ## 当前状态
 
@@ -17,11 +17,12 @@
   所以 tag 不含这套文档——这是有意的，tag 标记的是产物来源，不是最后的文档状态。
   `v1.3.0`（附注标签）指向 `753084c` 并已推送；此后又补了 CHANGELOG 与本节的状态修正，
   同样**不在 tag 内**——沿用 v1.2.2 的做法，tag 只标记产物来源。
-- **v1.3.0 状态**：代码已入库（`753084c`）、已推送、tag 已打；产物在 `release/v1.3.0/`。
-  **GitHub Release 尚未创建**——建完之后这一版才算发出去。
-- **已发布**：GitHub Release `v1.2.2`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.2.2>），
-  资产 `What-IDid-win64-1.2.2-20261105.zip`（116,130,117 字节 / 1104 条目 / sha256 `36f1d3c4…df1e`，
-  与 `release/v1.2.2/SHA256SUMS.txt` 一致）
+- **v1.3.0 状态**：**已发布**。代码入库 `753084c`、tag 同名、GitHub Release 2026-11-06 10:35 发布；
+  产物在 `release/v1.3.0/`。
+- **已发布**：GitHub Release `v1.3.0`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.3.0>），
+  资产 `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / 1106 条目 / sha256 `297b73b1…95c2`，
+  与 `release/v1.3.0/SHA256SUMS.txt` 一致；GitHub 侧记录的 digest 与本地逐位相同）。
+  上一版 `v1.2.2` 的资产是 `What-IDid-win64-1.2.2-20261105.zip`（116,130,117 字节）
 - **自测**：`scripts/harness.py check` 全绿（2026-11-06 10:25 实跑，`exit_code=0`）——
   它一次跑完静态校验、Harness 自测、隐私检查、隔离 E2E；**项数随分支浮动，以命令输出为准，
   本文件不写死数字**（同一天就有过一次 104→110 的增长）。
@@ -81,9 +82,9 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
       修的类别：`dev/` 根假设、已过期的进度摘要、计划任务条数、「正式采集不 OCR」、`scripts/*` 的
       `.build/` 过期路径、写死的回归项数、`publish.py` / `WORKSPACE.md` 的本机引用；
       另补 `requirements.txt`（9 个包按实测版本钉住）并让 `build_dist.py` 按它安装。
-- [x] **v1.3.0 入库与打 tag**（2026-11-06）：`7f4e02c`（Harness）、`753084c`（v1.3.0），
-      附注标签 `v1.3.0` 已推送。随后补的 CHANGELOG 与本文件修正不在 tag 内（沿用 v1.2.2 的取舍）。
-      **GitHub Release 尚未创建**——发版链路的最后一环。
+- [x] **v1.3.0 入库与发布**（2026-11-06）：`7f4e02c`（Harness）、`753084c`（v1.3.0），
+      附注标签 `v1.3.0` 已推送；`764d2c2` 补 CHANGELOG 与状态修正（不在 tag 内，沿用 v1.2.2 的取舍）。
+      GitHub Release 于 10:35 发布，资产与本地 sha256 一致。
 
 ## 进行中
 
@@ -124,16 +125,16 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
 9. **本文件与 `feature_list.json` 是两条独立维护的线，没有脚本比对**：产品行为可以在本文件里
    标成已完成，而功能项仍是 `not_started`（曾经 `source-links-001` 就是这样，现在已登记）。
    **功能状态一律以 `harness.py status` 为准**，本文件只记项目级事实，不复制状态计数。
+10. **`v1.3.0` 的 tag 里少两条 CHANGELOG 说明**：tag 指向 `753084c`，其 CHANGELOG 标题是
+    `2026-11-05` 且没有「旧 config.yaml 照旧可用」「内置 SQLite 组件」两条；这两条是 tag 之后
+    的文档提交 `764d2c2` 补上的，已写进 GitHub Release 正文。**tag 已随 Release 发布，不再移动**——
+    移动一个已发布 Release 的 tag，代价大于「checkout 后 CHANGELOG 少两行」。下一版自然带上。
 
 ## 下一步
 
-1. **建 GitHub Release `v1.3.0`**——这是唯一还差的一步：tag 已存在，直接选 `v1.3.0`；
-   正文粘贴 `release/v1.3.0/RELEASE_NOTES.md` 全文；资产上传
-   `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / 1106 条目 / sha256 `297b73b1…95c2`）。
-   建完之后把上面「已发布」一段从 `v1.2.2` 换成本版。
-2. 跑 `verify_dpi.py` 与 `gui_regression.py`：先 `wid.py pause`（否则测试会污染当天日报），
+1. 跑 `verify_dpi.py` 与 `gui_regression.py`：先 `wid.py pause`（否则测试会污染当天日报），
    `WID_HOME` 必须是 `.tmp_wid*`，跑完 `wid.py resume`，把通过/失败数记进本节。
    走 Harness 时对应 `harness.py resume gui-001 --reason "..."` → `harness.py verify gui-001`，
    证据由脚本写入，不手写 passing。
-3. 观察 11-06 起的日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
+2. 观察 11-06 起的日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
    「我参与了」）；若仍有偏差，按 `agents/decisions.md` 的 D-08 调 prompt，而不是加特例。
