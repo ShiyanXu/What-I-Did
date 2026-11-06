@@ -317,11 +317,3 @@ def canonical_url(uri: str, cfg=None) -> str:
     pairs.sort()
     tail = "&".join(f"{k}={v}" if v else k for k, v in pairs)
     return f"{base}?{tail}"
-
-
-def domain_source(host: str) -> str:
-    """只有域名时用的来源链接（微信/飞书内置浏览器）。空 host 返回空串。"""
-    host = (host or "").strip().lower()
-    if not host or "/" in host or " " in host:
-        return ""
-    return f"https://{host}/"

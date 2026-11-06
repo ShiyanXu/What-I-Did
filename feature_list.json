@@ -95,46 +95,6 @@
       "depends_on": []
     },
     {
-      "id": "source-links-001",
-      "priority": 30,
-      "area": "sources",
-      "title": "来源链接遵守脱敏、降级和分享规则",
-      "user_visible_behavior": "历史、地址栏和仅域名三级来源不会泄露敏感参数，分享版不保留 query。",
-      "status": "passing",
-      "verification": [
-        "运行隐私边界自测中的来源链接用例。",
-        "确认敏感参数、地址栏识别、域名降级和分享去 query 均通过。"
-      ],
-      "verification_commands": [
-        [
-          "{python}",
-          "scripts/check_privacy.py"
-        ]
-      ],
-      "evidence": [
-        {
-          "recorded_at": "2026-11-06T02:09:40.092Z",
-          "commands": [
-            {
-              "command": [
-                "{python}",
-                "scripts/check_privacy.py"
-              ],
-              "exit_code": 0,
-              "duration_ms": 1344.0,
-              "log_path": "state/harness/20261106T020938.730149Z-05c3aa8b-e592ee2fa265.log"
-            }
-          ],
-          "trace_path": "state/harness/20261106T020938.730149Z-05c3aa8b.jsonl",
-          "summary": "1/1 条验证命令成功，退出码均为 0"
-        }
-      ],
-      "notes": "本项只证明链接逻辑，不代替 GUI 或打包版端到端回归。",
-      "depends_on": [
-        "privacy-001"
-      ]
-    },
-    {
       "id": "harness-001",
       "priority": 40,
       "area": "harness",

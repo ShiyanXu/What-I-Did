@@ -222,8 +222,6 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
                 continue
             seen_urls.add(uri)
             label = _clean(r.get("label") or uri)
-            if str(r.get("source") or "") == "domain":
-                label = t("{label} (domain only)", label=label)
             lines.append(f"- [{label}]({uri})")
         lines.append("")
 

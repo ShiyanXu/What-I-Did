@@ -21,6 +21,64 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
+## [v1.4.0] - 2026-11-06
+
+### English
+
+A scope-narrowing release: the tool does one thing — record what you did — and stops trying
+to be a knowledge base. Two features leave the product here.
+
+#### Removed
+
+- **Source links are gone.** The browser-history lookup, the address-bar fallback and the
+  domain-only fallback are all removed, together with the clickable links they put into the
+  report, the two switches under Settings, the `doctor` item and the whole `browse.*` config
+  section. The report no longer says where a page was read — only what you did.
+- **`share.include_sources` is gone**, a key reserved for knowledge cards that were never built.
+- **`ocr.jsonl` no longer stores line coordinates.** `lines` and `height` existed only so the
+  address bar could be recognised; each block now saves its text once instead of twice, so the
+  file gets noticeably smaller.
+- **The build no longer bundles SQLite.** It was there only to read the browser history
+  database. The zip is smaller and the health check has one item less.
+
+#### Changed
+
+- **"Keep the query string in shared reports" moved into the Privacy card.** It is the only
+  sharing switch left and it was never about source links.
+- An old `config.yaml` that still carries a `browse:` block keeps loading fine — the block is
+  ignored. Nothing to migrate, nothing to delete.
+
+#### Fixed
+
+- **Deep config keys were written one level too shallow.** When the parent section already had
+  children, `a.b.c` was appended beside `b` instead of inside it. No setting you can reach in
+  the UI was affected; a regression test now covers that shape.
+
+### 中文
+
+这是一次收窄范围的版本：软件只做一件事——记录你做了什么，不再试图当知识库。两个功能在这一版离开。
+
+#### 移除
+
+- **来源链接整体去掉。** 读浏览器历史、地址栏兜底、仅域名兜底全部移除，连同它们在日报里
+  生成的**可点链接**、设置页的两个开关、体检里的 `Source links` 项，以及整个 `browse.*`
+  配置段。日报不再说「这页是在哪读的」，只说你做了什么。
+- **`share.include_sources` 去掉**——它是给从未实现的知识卡预留的键。
+- **`ocr.jsonl` 不再存行坐标。** `lines` 与 `height` 只为「认地址栏」而存在；现在每个块只
+  存一次文本，不再额外存一份带坐标的副本，文件明显变小。
+- **打包不再带 SQLite。** 它只用于读浏览器历史库。安装包变小，体检少一项。
+
+#### 变更
+
+- **「分享版保留网址参数」挪进隐私卡片。** 它是仅剩的分享开关，本来也不属于来源链接。
+- 旧 `config.yaml` 里若还留着 `browse:` 段，**照常加载**——那段会被忽略。不用迁移，也不用
+  手工删。
+
+#### 修复
+
+- **深层配置键的缩进写浅了一级。** 当父节已有子键时，`a.b.c` 会被插到 `b` 的同级而不是
+  `b` 内部。界面上能改到的设置都不受影响；现已补上覆盖这种形状的回归测试。
+
 ## [v1.3.1] - 2026-11-06
 
 ### English

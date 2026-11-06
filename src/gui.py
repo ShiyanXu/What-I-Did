@@ -34,7 +34,7 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 TITLE = t("What-IDid · Work Log")
 
 # 托盘菜单命令号（任意唯一整数即可）
@@ -1435,7 +1435,6 @@ class SettingsPage(tk.Frame):
         self._build_capture()
         self._build_ocr()
         self._build_report()
-        self._build_sources()
         self._build_privacy()
         self._build_startup()
 
@@ -1587,24 +1586,6 @@ class SettingsPage(tk.Frame):
         self._row(g, r, t("Total data cap (GB)"), self._spin(g, "retention.max_total_gb", 1, 500),
                   t("Above the cap, the oldest screenshots go first")); r += 1
 
-    def _build_sources(self):
-        card, g = self._card(t("Source links"),
-                             t("Attaches the original URL to each page you looked at"))
-        r = 0
-        self._row(g, r, t("Read browser history"),
-                  self._check(g, "browse.history.enabled",
-                              t("Match page blocks against local Chrome/Edge history")),
-                  t("Read-only and offline. Only the URLs of this day are matched; nothing is uploaded "
-                    "and no browsing history is copied into the data folder.")); r += 1
-        self._row(g, r, t("Fall back to the address bar"),
-                  self._check(g, "browse.address_bar.enabled",
-                              t("When history has no hit, try the URL shown at the top of the window")),
-                  t("Only works on captures that stored line positions; older days are skipped")); r += 1
-        self._row(g, r, t("Keep the query string in shared reports"),
-                  self._check(g, "share.keep_query",
-                              t("Off by default: query strings often carry session ids and search terms")),
-                  t("Local reports always keep it, minus sensitive values")); r += 1
-
     def _build_privacy(self):
         card, g = self._card(t("Privacy"), t("Pause/block leaves only an anonymous state; regex redaction cannot catch everything"))
         r = 0
@@ -1618,6 +1599,10 @@ class SettingsPage(tk.Frame):
                   t("No title, no screenshot, no OCR; also filtered when older days are regenerated")); r += 1
         self._row(g, r, t("Blocked title patterns"), self._text(g, "privacy.blocked_title_patterns", 2),
                   t("One regex per line; an invalid one rejects the save instead of being ignored")); r += 1
+        self._row(g, r, t("Keep the query string in shared reports"),
+                  self._check(g, "share.keep_query",
+                              t("Off by default: query strings often carry session ids and search terms")),
+                  t("Local reports always keep it, minus sensitive values")); r += 1
 
     def _build_startup(self):
         card, g = self._card(t("Startup"), "")
@@ -1660,8 +1645,6 @@ class SettingsPage(tk.Frame):
             "report.min_active_minutes": lambda: str(int(cfg.get("report.min_active_minutes", 20))),
             "report.open_browser": lambda: bool(cfg.get("report.open_browser", True)),
             "report.review_mode": lambda: bool(cfg.get("report.review_mode", False)),
-            "browse.history.enabled": lambda: bool(cfg.get("browse.history.enabled", False)),
-            "browse.address_bar.enabled": lambda: bool(cfg.get("browse.address_bar.enabled", True)),
             "share.keep_query": lambda: bool(cfg.get("share.keep_query", False)),
             "retention.shots_days": lambda: str(int(cfg.get("retention.shots_days", 7))),
             "retention.events_days": lambda: str(int(cfg.get("retention.events_days", 30))),
@@ -1732,8 +1715,6 @@ class SettingsPage(tk.Frame):
                 "report.min_active_minutes": self._num("report.min_active_minutes", 0, 600, t("Empty-day threshold")),
                 "report.open_browser": bool(self.vars["report.open_browser"].get()),
                 "report.review_mode": bool(self.vars["report.review_mode"].get()),
-                "browse.history.enabled": bool(self.vars["browse.history.enabled"].get()),
-                "browse.address_bar.enabled": bool(self.vars["browse.address_bar.enabled"].get()),
                 "share.keep_query": bool(self.vars["share.keep_query"].get()),
                 "retention.shots_days": self._num("retention.shots_days", 1, 365, t("Keep screenshots for (days)")),
                 "retention.events_days": self._num("retention.events_days", 1, 365, t("Event retention")),

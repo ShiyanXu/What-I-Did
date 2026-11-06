@@ -48,33 +48,6 @@ def run(cfg=None) -> list[tuple[str, str, str]]:
             missing.append(mod)
     add(OK if not missing else FAIL, t("Dependencies"), t("Everything present") if not missing else t("Missing: ") + ", ".join(missing))
 
-    # 2b. 来源链接：sqlite3 必须真的在包里（build.spec 曾把它列进 excludes）
-    try:
-        import sqlite3  # noqa: F401
-
-        has_sqlite = True
-    except Exception:
-        has_sqlite = False
-    if not has_sqlite:
-        add(FAIL, t("Source links"),
-            t("sqlite3 is missing from this build; browser history cannot be read"))
-    elif not cfg.get("browse.history.enabled", False):
-        add(OK, t("Source links"), t("Off; page blocks carry no URL"))
-    else:
-        try:
-            import browse
-
-            found = browse._profile_dirs(cfg)
-            if found:
-                add(OK, t("Source links"),
-                    t("{n} browser profile(s) found; history is read at report time", n=len(found)))
-            else:
-                add(WARN, t("Source links"),
-                    t("Enabled, but no Chrome/Edge history file was found"))
-        except Exception as exc:  # noqa: BLE001
-            add(WARN, t("Source links"),
-                t("Browser history unavailable ({err})", err=type(exc).__name__))
-
     # 3. 目录可写
     info_root = paths.describe()
     try:

@@ -123,7 +123,7 @@ class UrlProvider(BaseProvider):
     name = "url"
     scheme = "https"
 
-    # 命中通道 -> (为什么有这个链接, 置信度)。confidence 与 browse 产出的保持一致。
+    # 命中通道 -> (为什么有这个链接, 置信度)。
     _CHANNEL = {
         "history": ("Browser history match", 0.95),
         "address_bar": ("Read from the address bar", 0.6),

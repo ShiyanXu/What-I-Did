@@ -121,9 +121,6 @@ class Block:
     continuation: bool = False
     content_policy: str = "allowed"
     idle_seconds: float = 0.0
-    # 1.3.0：报告期反查到的来源链接（不参与 block_id 计算）
-    urls: list = field(default_factory=list)
-
     @property
     def duration(self) -> float:
         return max(0.0, (self.end - self.start).total_seconds())

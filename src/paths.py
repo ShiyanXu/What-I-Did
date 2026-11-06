@@ -131,15 +131,8 @@ def ocr_path(day: str) -> Path:
 
 
 def urls_path(day: str) -> Path:
-    """报告期从浏览器历史命中的来源链接，整份覆盖写。"""
+    """1.3.x 遗留：来源链接已从产品移除，不再生成；仍指向它只为清理旧文件。"""
     return day_dir(day) / "urls.jsonl"
-
-
-def browse_tmp() -> Path:
-    """历史库拷贝到这里读，读完即删（浏览器独占原文件，不能直接读）。"""
-    p = STATE / "tmp"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
 
 
 def report_md(day: str) -> Path:

@@ -22,6 +22,7 @@
 ├── graph.md               ← 单循环路由蓝图与图化升级判据
 ├── docs/                  ← 面向使用者的双语文档（会打进发布包）
 ├── agents/                ← 本目录：给 agent 看的工程文档（不打包）
+│   └── requirements/      ← 需求原文归档（逐字保留，只读；改口径写 PROGRESS.md 与 decisions.md）
 ├── requirements.txt       ← 运行与构建依赖的版本基线
 ├── config.default.yaml    ← 配置模板（入库）；config.yaml 是本机实际配置（不入库）
 └── data/ reports/ web/ state/ logs/ dist/   ← 运行产物，全部 .gitignore，克隆里没有

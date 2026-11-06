@@ -1034,37 +1034,9 @@ CATALOG: dict[str, str] = {
     '•  {start} - {end}\u3000{min} minutes with no record (likely away, in a meeting, or on a break)\n': '•  {start} – {end}\u3000{min} 分钟没有记录（多半是离开、会议或休息）\n',
     '…{n} more segments; open the Reports page after the report to see them all': '…另外 {n} 段，出报后可在「日报」页看全',
     '\u3000{n} min\n': '\u3000{n} 分\n',
-    # 1.3.0 来源链接
-    'Browser history match': '浏览器历史命中',
-    'Read from the address bar': '从地址栏识别',
-    'Only the site domain was recognised': '仅识别到站点域名',
-    'Link found in on-screen text': '屏幕上出现的链接',
-    '{label} (domain only)': '{label}（仅域名）',
-    'browse.history.browsers may only contain chrome, edge or firefox': 'browse.history.browsers 只能填 chrome、edge 或 firefox',
-    'Read browser history': '读取浏览历史',
-    'Read local Chrome/Edge history at report time to attach the original URL to each page. Read-only, never uploaded, can be turned off at any time.':
-        '出报时读本机 Chrome/Edge 历史，为每个网页补上原始链接。只读、不上传，随时可关。',
-    'Source links': '来源链接',
-    '(domain only)': '（仅域名）',
-    'Attaches the original URL to each page you looked at': '为每个看过的页面补上原始链接',
-    'Match page blocks against local Chrome/Edge history': '用本机 Chrome/Edge 历史匹配网页块',
-    'Read-only and offline. Only the URLs of this day are matched; nothing is uploaded '
-    'and no browsing history is copied into the data folder.':
-        '只读且离线。只匹配当天的网址，不上传任何内容，也不把浏览历史拷进数据目录。',
-    'Fall back to the address bar': '退回地址栏识别',
-    'When history has no hit, try the URL shown at the top of the window':
-        '历史里没命中时，尝试窗口顶部显示的网址',
-    'Only works on captures that stored line positions; older days are skipped':
-        '只对保存了行坐标的截图有效，更早的日期会被跳过',
+    # 分享脱敏
     'Keep the query string in shared reports': '分享版保留网址参数',
     'Off by default: query strings often carry session ids and search terms':
         '默认关闭：网址参数常带会话 id 和搜索词',
     'Local reports always keep it, minus sensitive values': '本地日报始终保留，仅对敏感参数打码',
-    'Off; page blocks carry no URL': '已关闭：网页块不带链接',
-    'sqlite3 is missing from this build; browser history cannot be read':
-        '这个构建里没有 sqlite3，读不了浏览器历史',
-    '{n} browser profile(s) found; history is read at report time':
-        '找到 {n} 个浏览器配置；历史只在出报时读',
-    'Enabled, but no Chrome/Edge history file was found': '已开启，但没找到 Chrome/Edge 历史库',
-    'Browser history unavailable ({err})': '浏览器历史不可用（{err}）',
 }

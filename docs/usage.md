@@ -32,9 +32,7 @@ With pre-send review enabled, a "pending review" badge shows up here together wi
 
 ### Settings
 
-Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, source links, report hour and pre-send review, retention, privacy lists, start at login.
-
-**Source links** decides whether each page block in the report carries the URL you actually visited. Reading browser history is **off by default**; two more switches let you fall back to the URL shown on screen, and decide whether the shared copy keeps query strings. See [Privacy](privacy.md#reading-browser-history) for exactly what is opened and stored.
+Model endpoint and key, outbound switch, capture scope, sampling interval, OCR engine, report hour and pre-send review, retention, privacy lists, start at login.
 
 Saving rewrites only the matching line in `config.yaml`; comments, alignment and block lists are left exactly as they were — it is not a full `yaml.dump` rewrite. Saving restarts capture so the new settings apply, but **changing the report hour still requires re-registering the scheduled task**.
 

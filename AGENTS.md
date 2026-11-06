@@ -20,7 +20,7 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 | **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 34 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
 | **怎么运行** | `python wid.py` 开界面；`wid.py daemon` 常驻采集；`wid.py report --date YYYY-MM-DD --no-open` 手动出某天报告 | `agents/environment.md` |
 | **怎么验证** | 先跑 `scripts/harness.py check`（Harness 自测 + 隐私 + 隔离 E2E）；发版前 `doctor --full`，必要时按改动加跑 DPI / GUI 回归 | `agents/harness.md`、`agents/verification.md` |
-| **现在进度如何** | v1.3.1 已发布（tag `092b7c4`）；功能项 6/6 `passing`，`blocked` 归零 | `PROGRESS.md` |
+| **现在进度如何** | v1.4.0 已构建、待打 tag；功能项 5/5 `passing`，`blocked` 归零 | `PROGRESS.md` |
 
 ## 常用命令
 
@@ -94,4 +94,5 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 | `agents/environment.md` | 跑不起来、OCR 不工作、计划任务/路径/代理出问题时 |
 | `agents/workflow.md` | 要发布、要转载到 `W:`、要打 zip、要升版本时 |
 | `agents/decisions.md` | 想推翻某个设计（锁、分段、证据档位、文件名策略）之前 |
+| `agents/requirements/wid-req-2026-11-001.md` | 想知道来源链接/知识卡当初为什么这么做（R2 已取消、R1 待移除，见 D-19）；与现状冲突时以 `PROGRESS.md` 的「需求交付状态」为准 |
 

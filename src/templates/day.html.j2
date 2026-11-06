@@ -364,7 +364,7 @@
         <div class="chips">
           {% for r in refs_list %}
             {% if r.clickable %}
-            <a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.why }} · {{ r.uri }}">{{ r.label }}{% if r.source == "domain" %}<span class="domain-only">{{ t("(domain only)") }}</span>{% endif %}</a>
+            <a class="refchip {{ r.kind }}" href="{{ r.uri }}" target="_blank" title="{{ r.why }} · {{ r.uri }}">{{ r.label }}</a>
             {% else %}
             <span class="refchip off" title="{{ r.uri }}">{{ r.label }}</span>
             {% endif %}

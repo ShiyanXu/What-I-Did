@@ -88,23 +88,8 @@ DEFAULTS: dict[str, Any] = {
         "refresh_gap_min": 90,
     },
     "obsidian": {"enabled": False, "vault_dir": ""},
-    "browse": {
-        # 默认关：这是本项目第一次主动读"与工作无关的本机隐私数据"，
-        # 由用户在设置页手动开启（1.3.0 决策 D-4）。
-        "history": {
-            "enabled": False,
-            "browsers": ["chrome", "edge"],
-            "profiles": "auto",
-            "lookback_sec": 3600,
-            "ahead_sec": 30,
-            "max_urls_per_block": 3,
-            "copy_timeout_sec": 5,
-        },
-        "address_bar": {"enabled": True, "top_ratio": 0.15},
-        "domain_only": {"enabled": True},
-    },
     "url": {"keep_query": True, "strip_tracking": False, "redact_secret_params": True},
-    "share": {"keep_query": False, "include_sources": False},
+    "share": {"keep_query": False},
     "refs": {
         "enabled": True,
         "providers": ["local_file", "obsidian", "url"],
@@ -275,20 +260,10 @@ def _parse_config(text: str) -> dict:
         if any(not isinstance(value, str) for value in cfg.get(key)):
             raise ConfigError(t("{key} must be a list of strings", key=key))
     for key in ("ocr.crop_active_window", "capture.pause_on_locked", "report.review_mode",
-                "browse.history.enabled", "browse.address_bar.enabled", "browse.domain_only.enabled",
                 "url.keep_query", "url.strip_tracking", "url.redact_secret_params",
-                "share.keep_query", "share.include_sources"):
+                "share.keep_query"):
         if not isinstance(cfg.get(key), bool):
             raise ConfigError(t("{key} must be true or false", key=key))
-    for key in ("browse.history.lookback_sec", "browse.history.ahead_sec",
-                "browse.history.max_urls_per_block"):
-        number(key, 0, 86400, integer=True)
-    number("browse.history.max_urls_per_block", 1, 20, integer=True)
-    number("browse.history.copy_timeout_sec", 0.5, 60)
-    number("browse.address_bar.top_ratio", 0.01, 1)
-    known = {"chrome", "edge", "firefox"}
-    if any(str(b).lower() not in known for b in (cfg.get("browse.history.browsers") or [])):
-        raise ConfigError(t("browse.history.browsers may only contain chrome, edge or firefox"))
     return merged
 
 
@@ -528,11 +503,13 @@ def _set_path(lines: list[str], parts: list[str], value: Any) -> list[str]:
     pos = hi
     while pos > lo and not lines[pos - 1].strip():
         pos -= 1
+    # 插入新键：缩进必须跟着层级走，否则 `a.b.c` 会被写进 b 的同级而不是 b 内部
+    ind = "  " * (len(parts) - 1)
     if isinstance(value, (list, tuple)) and value:
-        block = [f"  {parts[-1]}:"] + [f"    - {_fmt_scalar(x, True)}" for x in value]
+        block = [f"{ind}{parts[-1]}:"] + [f"{ind}  - {_fmt_scalar(x, True)}" for x in value]
         lines[pos:pos] = block
     else:
-        lines.insert(pos, f"  {parts[-1]}: {_fmt_scalar(value)}")
+        lines.insert(pos, f"{ind}{parts[-1]}: {_fmt_scalar(value)}")
     return lines
 
 

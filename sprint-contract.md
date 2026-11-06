@@ -27,7 +27,7 @@
 - 不修改 `src/` 产品逻辑，不重建或替换生产 exe，不碰真实采集数据。
 - 不新增 pip 依赖，不引入 OpenTelemetry SDK、LangGraph、自动 loop 或多 agent 并行。
 - 不运行会污染当天日报的 GUI 点级测试；保留并明确记录 `gui-001` 阻塞。
-- 不处理工作区里已有的来源链接改动，不 reset/clean，不 commit/push/tag/Release；改动数量随会话变化，
+- 不处理工作区里已有的改动，不 reset/clean，不 commit/push/tag/Release；改动数量随会话变化，
   一律现跑 `git status --short` 现查，不写进本文件。
 - 不建立重复的 `CLAUDE.md` 或 `claude-progress.md`；现有 AGENTS/PROGRESS 是唯一事实源。
 

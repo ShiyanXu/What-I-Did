@@ -38,8 +38,6 @@ MODULES = [
     # 人工修订 / 遗忘 / 跨日检索 / 周汇总 / 安全导出：
     # 这几个模块只在子命令里按需导入，静态分析看不到，漏写会在打包版直接 ImportError
     "manual", "forget", "search", "weekly", "export_safe",
-    # 1.3.0：浏览器历史反查，报告期按需导入
-    "browse",
 ]
 
 # 词条表（i18n.py、i18n_zh_cn.py…）由 i18n.locale_module() 用 importlib 动态加载，
@@ -63,9 +61,6 @@ datas += collect_data_files("rapidocr", include_py_files=False)
 hiddenimports = list(MODULES) + [
     "rapidocr", "onnxruntime", "onnxruntime.capi._pybind_state",
     "cv2", "shapely", "pyclipper", "yaml", "jinja2.ext",
-    # browse.py 读浏览器历史库要用：以前 sqlite3 在 excludes 里，
-    # 静态分析又看不到 import（是条件导入），打包版会直接 ModuleNotFoundError。
-    "sqlite3", "_sqlite3",
 ]
 hiddenimports += collect_submodules("rapidocr")
 
