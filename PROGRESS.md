@@ -26,14 +26,16 @@
 - **自测**：`scripts/harness.py check` 全绿（2026-11-06 10:25 实跑，`exit_code=0`）——
   它一次跑完静态校验、Harness 自测、隐私检查、隔离 E2E；**项数随分支浮动，以命令输出为准，
   本文件不写死数字**（同一天就有过一次 104→110 的增长）。
-  DPI 与 GUI 回归 1.2.2 未跑，1.3.0 亦未跑（原因见「已知问题 1」）
+  DPI 与 GUI 回归 2026-11-06 首次实跑并全绿：`verify_dpi.py` 14/14、`gui_regression.py` 41/41；
+  `gui-001` 已由 `harness.py verify` 登记 passing，证据在 `feature_list.json`。
 - **文档**：`AGENTS.md`、本文件、`agents/` 下专题首次入库于 `888c30f`；两轮「克隆后五问」纠偏在
   `227935c`；此后只有本文件自身的措辞补正，不再单列提交号
 - **生产实例**：`D:\What-IDid` 已换 v1.3.0（历史数据保留），采集由计划任务 `WhatIDid-Recorder`
   拉起，心跳正常
-- **未收尾的元信息**：
-  - `release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit` 写的是 `1e4a5ed`，
-    应为 `1a6d251`（tag 实际目标）。本地文件可直接改，网页需人工改。
+- **已核对的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit`
+  都是 `1a6d251`（tag 实际目标），两侧已对齐。本文件此前记成 `1e4a5ed`——那是产物生成时的 dev HEAD，
+  Release 正文在 2026-11-05 16:33 已改好，只是本文件没跟上；**属本文件的过期断言，不是发布问题**。
+  改这类断言前先跑 `git rev-parse v1.2.2^{commit}` 与接口查正文，别沿用上一轮结论。
   - `release/v1.3.0/RELEASE_NOTES.md` 是**手工修正**的：`Source commit` 由 `883320c` 改成 `753084c`，
     `Self-tests` 行改为 harness 口径，Notes 各补两条（旧 `config.yaml` 照旧可用、绿色版已内置 SQLite）。
     手工的原因当时是「不改 CHANGELOG、不动 tag」；后来 CHANGELOG 已在 tag 之后补上同样两条，
@@ -89,52 +91,44 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
 ## 进行中
 
 - **Harness 工作系统已建成**：`python scripts/harness.py check` 全绿。功能层面的推进状态以
-  `python scripts/harness.py status` 为准（`gui-001` 仍为 `blocked`），本文件不复制功能清单，
+  `python scripts/harness.py status` 为准（当前 6 项全部 `passing`、`blocked` 归零），本文件不复制功能清单，
   也不记录「几项待提交」这类一提交就过期的数字。
 - 提交与推送仍由 iMac 侧按 `agents/workflow.md` 执行；本机只改与验。
 
 ## 已知问题
 
-1. **DPI 与 GUI 点级回归本版未跑**（`verify_dpi.py` 14 项、`gui_regression.py` 约 41 项）。
-   发布说明已如实标注。没跑 GUI 回归是**故意的**：它会真开界面、真点击，而采集正在运行，
-   这些动作会进当天活动块、污染日报——要跑就先 `wid.py pause`。另：`gui_regression` 的项数随
-   条件分支浮动（静态约 36 个 `check()` 调用点），文档已改成「不写死数字，看通过/失败两栏」。
-2. **`src/paths.py:56-60` 有一段等价分支**：带 `portable.marker` 的分支与紧随其后的「可写就用程序目录」
+1. **`src/paths.py:56-60` 有一段等价分支**：带 `portable.marker` 的分支与紧随其后的「可写就用程序目录」
    返回同一个值，marker 实际不起作用；`docs/architecture*` 也只写了三级路径、没提这个 marker。
    要么删掉分支，要么让 marker 真能强制便携。改它要重建 dist，留到下次动 `paths.py` 时一起做。
-3. **`W:` 共享的权限边界（实测修正，原表述「不可写已有文件」是错的）**：根目录可写可删；
+2. **`W:` 共享的权限边界（实测修正，原表述「不可写已有文件」是错的）**：根目录可写可删；
    仓库子目录允许**新建文件**，也允许对已有文件**原地截断写/追加**；真正被禁的是**改名与删除**
    ——git 提交要 write-temp + rename，所以 Windows 侧 commit / push 必失败。
    改过的文件过去一律用 `.new` 中转，是当初误判「不可写」时留下的习惯；普通文件可以直接覆盖，
    但覆盖会丢可执行位（`init.sh` 就这么从 100755 变成 100644，工作区因此显示脏），
    有 x 位的文件仍走 `.new` + iMac 侧 `mv -f`。路径大小写也要写准：`What-IDid` 能 `ls`
    却 `cd` 不进、写入报 No such file。
-4. **Windows 侧无 git 凭据**，push / tag / GitHub Release 只能 iMac 侧做。
-5. **同步是手动的**（`git fetch && git reset --mixed`）。推送后不归零，下次改动的 diff 里会混进旧提交。
-6. **本文件依赖人/agent 主动更新**，没有任何自动检查会发现它过期。已经错过三次：
+3. **Windows 侧无 git 凭据**，push / tag / GitHub Release 只能 iMac 侧做。
+4. **同步是手动的**（`git fetch && git reset --mixed`）。推送后不归零，下次改动的 diff 里会混进旧提交。
+5. **本文件依赖人/agent 主动更新**，没有任何自动检查会发现它过期。已经错过三次：
    一次写「6 项待提交」而实际已推送、一次写「工作区干净」而实际 15 项没提交、
    一次写「17 项未提交」而当时刚提交完。**根因是写死当前 HEAD 与未提交项清单**——文件一被提交，
    这两个值必然变化。现在的做法：状态一律写成不变量 + 自查命令（见「当前状态」开头），
    字面量只留给已经不动了的提交号。改这一节时先跑自查，别凭上一次的记忆写。
-7. **块清单的「分类」是本地按标题猜的**（含「文档/.md」的标题会被猜成 writing）。
+6. **块清单的「分类」是本地按标题猜的**（含「文档/.md」的标题会被猜成 writing）。
    它只用于聚类，不能作为行为判定依据，prompt 里已明确写死。
-8. **`dist/` 与 v1.2.2 的 zip 构建于 `227935c` 之前**。那次提交只动文档、注释、`scripts/`（不进包）
+7. **`dist/` 与 v1.2.2 的 zip 构建于 `227935c` 之前**。那次提交只动文档、注释、`scripts/`（不进包）
    与 `build_dist.py`（不进包），唯一进包的是 `config.default.yaml` 里的一行注释——注释只影响
    「首次运行生成 config.yaml」时的可读性，不影响任何行为。所以不重打包：同一版本号换资产会让
    已发布的 sha256 失效，代价大于收益。下一次因代码升版时才自然带上。
-9. **本文件与 `feature_list.json` 是两条独立维护的线，没有脚本比对**：产品行为可以在本文件里
+8. **本文件与 `feature_list.json` 是两条独立维护的线，没有脚本比对**：产品行为可以在本文件里
    标成已完成，而功能项仍是 `not_started`（曾经 `source-links-001` 就是这样，现在已登记）。
    **功能状态一律以 `harness.py status` 为准**，本文件只记项目级事实，不复制状态计数。
-10. **`v1.3.0` 的 tag 里少两条 CHANGELOG 说明**：tag 指向 `753084c`，其 CHANGELOG 标题是
+9. **`v1.3.0` 的 tag 里少两条 CHANGELOG 说明**：tag 指向 `753084c`，其 CHANGELOG 标题是
     `2026-11-05` 且没有「旧 config.yaml 照旧可用」「内置 SQLite 组件」两条；这两条是 tag 之后
     的文档提交 `764d2c2` 补上的，已写进 GitHub Release 正文。**tag 已随 Release 发布，不再移动**——
     移动一个已发布 Release 的 tag，代价大于「checkout 后 CHANGELOG 少两行」。下一版自然带上。
 
 ## 下一步
 
-1. 跑 `verify_dpi.py` 与 `gui_regression.py`：先 `wid.py pause`（否则测试会污染当天日报），
-   `WID_HOME` 必须是 `.tmp_wid*`，跑完 `wid.py resume`，把通过/失败数记进本节。
-   走 Harness 时对应 `harness.py resume gui-001 --reason "..."` → `harness.py verify gui-001`，
-   证据由脚本写入，不手写 passing。
-2. 观察 11-06 起的日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
+1. 观察 11-06 起的日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
    「我参与了」）；若仍有偏差，按 `agents/decisions.md` 的 D-08 调 prompt，而不是加特例。

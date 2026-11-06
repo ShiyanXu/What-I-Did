@@ -222,7 +222,7 @@
       "area": "gui",
       "title": "四页界面通过 DPI 与合成点击回归",
       "user_visible_behavior": "界面在高 DPI 和中英文切换下保持控件可用、布局一致。",
-      "status": "blocked",
+      "status": "passing",
       "verification": [
         "先暂停采集，避免测试窗口污染当天日报。",
         "在刚生成的隔离 WID_HOME 中运行 DPI 与 GUI 回归。",
@@ -238,8 +238,34 @@
           "scripts/gui_regression.py"
         ]
       ],
-      "evidence": [],
-      "notes": "阻塞：需要先 wid.py pause，并按 agents/verification.md 准备全新隔离 WID_HOME；本轮 Harness 建设未执行 GUI 测试。",
+      "evidence": [
+        {
+          "recorded_at": "2026-11-06T03:05:19.352Z",
+          "commands": [
+            {
+              "command": [
+                "{python}",
+                "scripts/verify_dpi.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 2266.0,
+              "log_path": "state/harness/20261106T030434.424897Z-4e0f242a-0588751fe961.log"
+            },
+            {
+              "command": [
+                "{python}",
+                "scripts/gui_regression.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 42625.0,
+              "log_path": "state/harness/20261106T030434.424897Z-4e0f242a-d399741e7552.log"
+            }
+          ],
+          "trace_path": "state/harness/20261106T030434.424897Z-4e0f242a.jsonl",
+          "summary": "2/2 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "阻塞：需要先 wid.py pause，并按 agents/verification.md 准备全新隔离 WID_HOME；本轮 Harness 建设未执行 GUI 测试。\n[2026-11-06] 解除阻塞：DPI 与 GUI 回归已可执行：修掉了审核按钮被布局裁掉的 bug，测试改为断言按钮可点",
       "depends_on": []
     }
   ]

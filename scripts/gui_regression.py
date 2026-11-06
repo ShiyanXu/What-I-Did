@@ -99,6 +99,20 @@ def find_button(parent, text: str):
     return None
 
 
+def find_op(page, text: str):
+    """找页面上的操作按钮，并确认它**真的被布局出来**。
+
+    只 `find_button` 不够：控件可以创建成功却宽高为 1×1、未映射（pack 溢出时排在最后的
+    那个会被裁掉），此时点击发不出去，测试会静默通过后续逻辑。2026-11-06 就是审核入口
+    被徽章挤掉，正是靠这条判据定位的。
+    """
+    btn = find_button(page, text)
+    if btn is None:
+        return None
+    btn.update_idletasks()
+    return btn if btn.winfo_ismapped() else None
+
+
 def main() -> int:
     print(f"WID_HOME = {paths.ROOT}")
     day_ok = "2026-10-18"
@@ -154,8 +168,8 @@ def main() -> int:
     print("\n[5] 补录（点击「补录」→ 输入 → 落盘）")
     manual_path = paths.day_dir(day_ok) / "manual.json"
     before = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
-    btn = find_button(page.badge_box, t("Add entry"))
-    check("日报页有「补录」按钮", btn is not None)
+    btn = find_op(page, t("Add entry"))
+    check("日报页有可见的「补录」按钮", btn is not None)
     if btn is not None:
         simpledialog.askstring = lambda *a, **k: "10:00-11:00 线下客户沟通"
         click(btn, app, t("Add entry"))
@@ -166,14 +180,14 @@ def main() -> int:
               f"{len(got)} 条")
 
         simpledialog.askstring = lambda *a, **k: "随便写点没时间的"
-        click(find_button(page.badge_box, t("Add entry")), app, "补录(坏格式)")
+        click(find_op(page, t("Add entry")), app, "补录(坏格式)")
         pump(app, 0.8)
         after2 = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
         got2 = json.loads(after2)["offline"] if after2 else []
         check("格式不对不写入", len(got2) == len(got), f"{len(got2)} 条（期望 {len(got)}）")
 
         simpledialog.askstring = lambda *a, **k: "25:00-26:00 错时间"
-        click(find_button(page.badge_box, t("Add entry")), app, "补录(错时间)")
+        click(find_op(page, t("Add entry")), app, "补录(错时间)")
         pump(app, 0.8)
         after3 = manual_path.read_text(encoding="utf-8") if manual_path.exists() else ""
         got3 = json.loads(after3)["offline"] if after3 else []
@@ -183,8 +197,8 @@ def main() -> int:
     print("\n[6] 遗忘（先取消，再确认）")
     if day_del in page._rows:
         click(page._rows[day_del]["widgets"][0], app, "row:2026-10-19")
-    btn = find_button(page.badge_box, t("Forget day"))
-    check("日报页有「遗忘这天」按钮", btn is not None)
+    btn = find_op(page, t("Forget day"))
+    check("日报页有可见的「遗忘这天」按钮", btn is not None)
     if btn is not None:
         gui.messagebox.askyesno = lambda *a, **k: False
         click(btn, app, "遗忘(取消)")
@@ -192,7 +206,7 @@ def main() -> int:
         check("取消时不删数据", (paths.REPORTS / f"{day_del}.json").exists(), "日报还在")
 
         gui.messagebox.askyesno = lambda *a, **k: True
-        click(find_button(page.badge_box, t("Forget day")) or btn, app, "遗忘(确认)")
+        click(find_op(page, t("Forget day")) or btn, app, "遗忘(确认)")
         # 等后台线程跑完并且结果已经回主线程（_busy 归零），否则 done() 里的
         # show_placeholder 会晚一步落到界面上，把后续断言全带偏
         ok = pump(app, 20.0, until=lambda: app._busy == 0
@@ -225,8 +239,8 @@ def main() -> int:
 
         _collect(page.badge_box)
         print(f"       徽章区: {badges}")
-        btn_rv = find_button(page.badge_box, t("Review queued content"))
-        check("已出报+有待审时出现入口", btn_rv is not None)
+        btn_rv = find_op(page, t("Review queued content"))
+        check("已出报+有待审时有可见的审核入口", btn_rv is not None)
         if btn_rv is not None:
             click(btn_rv, app, t("Review queued content"))
             pump(app, 0.8)
@@ -235,7 +249,7 @@ def main() -> int:
             check("点击后切到审核视图", "will be sent to the model" in text or "将要发给模型" in text,
                   f"{len(text)} 字")
 
-            send = find_button(page.badge_box, t("Approve & send"))
+            send = find_op(page, t("Approve & send"))
             check("审核视图有「审核并发送」", send is not None)
             if send is not None:
                 prev_rev = int((status.load_report(day_ok) or {}).get("revision") or 0)
@@ -259,12 +273,12 @@ def main() -> int:
         page.render(day_ok)
         pump(app, 0.8)
         check("重新制造出待审预览", bool(status.pending_review(day_ok)))
-        btn_rv = find_button(page.badge_box, t("Review queued content"))
+        btn_rv = find_op(page, t("Review queued content"))
         if btn_rv is not None:
             click(btn_rv, app, "审核待发内容(第二次)")
             pump(app, 0.6)
         rev_before = int((status.load_report(day_ok) or {}).get("revision") or 0)
-        discard = find_button(page.badge_box, t("Discard"))
+        discard = find_op(page, t("Discard"))
         check("审核视图有「丢弃」", discard is not None)
         if discard is not None:
             click(discard, app, t("Discard"))

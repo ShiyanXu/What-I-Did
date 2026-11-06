@@ -747,6 +747,12 @@ class ReportsPage(tk.Frame):
         self.badge_box = tk.Frame(top.body, bg=CARD)
         self.badge_box.pack(fill="x", pady=(px(6), 0))
 
+        # 与徽章同挤一行时，pack 会把排在最后的关键动作压成 1x1，审核入口就此点不到
+        # （2026-11-06 实测：卡片 554 宽、行内容需要 677 宽，第三个按钮被裁掉）。
+        # 单独一行后两行各自都放得下，窗口再窄也只裁徽章，不裁动作。
+        self.ops_row = tk.Frame(top.body, bg=CARD)
+        self.ops_row.pack(fill="x", pady=(px(4), 0))
+
         self.headline = tk.Label(top.body, text="", bg=CARD, fg=BODY, font=(FONT, 11),
                                  wraplength=px(600), justify="left", anchor="w")
         self.headline.pack(fill="x", pady=(px(8), px(10)))
@@ -901,6 +907,7 @@ class ReportsPage(tk.Frame):
                                               "\nor hit \"Generate report now\" to turn today's data into text."))
         for w in self.badge_box.winfo_children():
             w.destroy()
+        self._clear_day_ops()
         for w in self.chips.winfo_children():
             w.destroy()
         self._segs = []
@@ -977,9 +984,15 @@ class ReportsPage(tk.Frame):
         self._write_report(d)
         self.text.yview_moveto(0)
 
+    def _clear_day_ops(self) -> None:
+        """按钮行独立于徽章行，两处渲染（日报/审核/占位）都要各自清一遍。"""
+        for w in self.ops_row.winfo_children():
+            w.destroy()
+
     def _day_ops(self, day: str, has_review: bool = False):
         """与"这一天"相关的补充/危险操作，靠右放，避免顶部按钮继续变长。"""
-        ops = tk.Frame(self.badge_box, bg=CARD)
+        self._clear_day_ops()
+        ops = tk.Frame(self.ops_row, bg=CARD)
         ops.pack(side="right")
         FlatButton(ops, t("Add entry"), lambda: self._add_manual(day), "ghost",
                    padx=8, pady=2, font_size=8).pack(side="right", padx=(px(6), 0))
@@ -998,10 +1011,11 @@ class ReportsPage(tk.Frame):
 
         for w in self.badge_box.winfo_children():
             w.destroy()
+        self._clear_day_ops()
         self._badge(t("Pending review"), WARN_C, "#fffbeb")
         if info.get("model"):
             self._badge(str(info["model"]), MUTED, "#f1f3f7")
-        ops = tk.Frame(self.badge_box, bg=CARD)
+        ops = tk.Frame(self.ops_row, bg=CARD)
         ops.pack(side="right")
         FlatButton(ops, t("Discard"), lambda: self._discard_review(day), "ghost",
                    padx=8, pady=2, font_size=8).pack(side="right", padx=(px(6), 0))
