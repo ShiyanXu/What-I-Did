@@ -2,7 +2,7 @@
 
 > **这是唯一的进度事实来源。** 新会话从这里接续，不要凭记忆或聊天记录猜。
 > 维护规则：每次会话结束前更新本文件；只写事实与下一步，不写过程感想。
-> 最后更新：2026-11-06 14:40
+> 最后更新：2026-11-06 15:35
 
 ## 当前状态
 
@@ -10,30 +10,35 @@
 > 一经提交就过期——本项目已经因此错过三次。当前值一律用下面自查第 1、2 条现查；
 > 只有**已经不动了的**提交号（过去的提交、tag 目标）才写成字面量。
 
-- **版本**：`1.4.0`（`src/gui.py:VERSION`，唯一来源）——**已构建、未打 tag**
+- **版本**：`1.4.0`（`src/gui.py:VERSION`，唯一来源）——已发布，tag `v1.4.0`
 - **仓库**：HEAD 已推送、与 `origin/main` 一致。**工作区是否干净不写在这里**——本文件与改动一起提交，
   写死「干净」立刻过期；一律现跑 `git status --short` 判断，把它的输出当唯一依据。
 - **tag**：`v1.2.2`（`85b0c67`）→ `1a6d251`、`v1.3.0`（`0f89c19`）→ `753084c`、`v1.3.1`（`4e4c67d`）
-  → `092b7c4`，三个附注标签都已推送。tag 只标记**产物来源**，不标记最后的文档状态：
-  `v1.3.0` 之后还有 CHANGELOG 与状态修正（`764d2c2`），这些**不在 tag 内**——有意的取舍，不是遗漏。
-- **v1.3.1 状态**：**已发布**。代码入库 `092b7c4`、tag 同名、GitHub Release 2026-11-06 14:10 发布；
-  产物在 `release/v1.3.1/`，生产实例当前跑的就是这一版。
-- **v1.4.0 状态**：**范围收窄版，已构建、待发布**。内容只有一件事：把来源链接（R1）与知识卡（R2）
-  彻底移出产品（依据 `agents/decisions.md` D-19），另修一个深层配置键缩进 bug。打 tag 与 Release 待做。
-- **已发布**：GitHub Release `v1.3.1`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.3.1>），
-  资产 `What-IDid-win64-1.3.1-20261106.zip`（116,985,077 字节 / 1106 条目 / sha256 `aa85acf6…1d05`，
-  与 `release/v1.3.1/SHA256SUMS.txt` 一致；GitHub 侧 `digest` 字段与本地逐位相同）。
-  上一版 `v1.3.0` 的资产是 `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / `297b73b1…95c2`）
-- **自测**：`scripts/harness.py check` 全绿（2026-11-06 14:55 实跑，`exit_code=0`）——
+  → `092b7c4`、`v1.4.0`（`4283584`）→ `18de063`，五个附注标签都已推送。tag 只标记**产物来源**，
+  不标记最后的文档状态：`v1.3.0` 之后还有 CHANGELOG 与状态修正（`764d2c2`），这些**不在 tag 内**
+  ——有意的取舍，不是遗漏。
+- **v1.4.0 状态**：**已发布**。范围收窄版：把来源链接（R1）与知识卡（R2）彻底移出产品
+  （依据 `agents/decisions.md` D-19），另修一个深层配置键缩进 bug。代码入库 `18de063`、tag 同名、
+  GitHub Release 2026-11-06 15:32 发布；产物在 `release/v1.4.0/`。
+- **v1.3.1 状态**：**已发布**（上一版）。代码入库 `092b7c4`、tag 同名、Release 14:10 发布；
+  生产实例跑过这一版，2026-11-06 15:22 起换成 1.4.0。
+- **已发布**：GitHub Release `v1.4.0`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.4.0>），
+  资产 `What-IDid-win64-1.4.0-20261106.zip`（116,136,372 字节 / 1104 条目 / sha256 `7b6f17d1…50a32`，
+  与 `release/v1.4.0/SHA256SUMS.txt` 一致；GitHub 侧 `digest` 字段与本地逐位相同）。
+  上一版 `v1.3.1` 的资产是 `What-IDid-win64-1.3.1-20261106.zip`（116,985,077 字节 / `aa85acf6…1d05`）；
+  1.4.0 比它**小 848,705 字节**——去掉 SQLite 与 `browse.py` 的净收益
+- **自测**：`scripts/harness.py check` 全绿（2026-11-06 15:00 前后随打包实跑，`exit_code=0`）——
   它一次跑完静态校验、Harness 自测、隐私检查、隔离 E2E；**项数随分支浮动，以命令输出为准，
   本文件不写死数字**。
-  1.4.0 裁剪后重跑：`verify_dpi.py` 14/14、`gui_regression.py` 41/41（2026-11-06 14:50 实跑，
-  用 `seed_gui_home.py` 新建的隔离目录，跑完即删）；
+  `publish.py --full` 同一次跑完：`verify_dpi.py` 14/14、`gui_regression.py` 41/41（用
+  `seed_gui_home.py` 新建的隔离目录，跑完即删）；
   `harness.py status` 当前 5/5 `passing`、`blocked` / `in_progress` 归零（`source-links-001` 已删除）。
 - **文档**：`AGENTS.md`、本文件、`agents/` 下专题首次入库于 `888c30f`；两轮「克隆后五问」纠偏在
   `227935c`；`07fe7f3` 把仓库地图移出入口文件（新建 `agents/layout.md`，入口从 127 行降到 97 行）
-- **生产实例**：`D:\What-IDid` 已换 v1.3.1（exe md5 `5ae8148c…`、`_internal` 1104 文件、
-  `doctor --full` 18 项全绿），历史数据原地保留；采集由计划任务 `WhatIDid-Recorder` 拉起，心跳正常
+- **生产实例**：`D:\What-IDid` 已换 v1.4.0（exe md5 `612c42c0…`、`_internal` 1102 文件、
+  `doctor --full` 16 正常 / 1 提醒 / 0 失败；项数比 1.3.1 少 1，少的正是删掉的 `Source links`），
+  历史数据原地保留；采集 pid 18852 由 WMI 拉起，心跳正常，新写入的 `ocr.jsonl` 已不含
+  `lines` / `height`。`config.yaml` 里本来就没有 `browse:` / `share:` 段，新代码加载零报错、无需迁移。
 - **已核对的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit`
   都是 `1a6d251`（tag 实际目标），两侧已对齐。本文件此前记成 `1e4a5ed`——那是产物生成时的 dev HEAD，
   Release 正文在 2026-11-05 16:33 已改好，只是本文件没跟上；**属本文件的过期断言，不是发布问题**。
@@ -52,7 +57,8 @@ git rev-list --left-right --count @{u}...HEAD   # 必须是 "0	0"（不领先也
 git rev-parse v1.2.2^{commit}                   # 应为 1a6d251，tag 不会移动
 git rev-parse v1.3.0^{commit}                   # 应为 753084c，tag 不会移动
 git rev-parse v1.3.1^{commit}                   # 应为 092b7c4，tag 不会移动
-git tag -l "v1.3*"                              # 应含 v1.3.0 与 v1.3.1（本机缺 tag 时先 git fetch --tags）
+git rev-parse v1.4.0^{commit}                   # 应为 18de063，tag 不会移动
+git tag -l "v1.4*"                              # 应含 v1.4.0（本机缺 tag 时先 git fetch --tags）
 PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态+Harness+隐私+隔离E2E
 ```
 
@@ -100,7 +106,8 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
       删 `browse.py` 与它的全部消费者（`report.py` 的出报主路径、`Block.urls`、refs 注入循环、
       `export_safe` 的 domain 角标）、`ocr.jsonl` 的行坐标、设置页整张卡片、`doctor` 检查项、
       `browse.*` 配置与 8 份文档；打包不再带 `sqlite3`。顺带修一个真 bug：`_set_path` 插三层键时
-      缩进写浅一级（父节已有子键时才暴露）。
+      缩进写浅一级（父节已有子键时才暴露）。入库 `18de063`，附注标签 `v1.4.0`（`4283584`）已推送，
+      Release 于 15:32 发布，资产 116,136,372 字节 / sha256 与本地一致；生产实例同日 15:22 换装。
 
 ## 进行中
 
@@ -261,14 +268,22 @@ PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态
    移动一个已发布 Release 的 tag，代价大于「checkout 后 CHANGELOG 少两行」。
    `v1.3.1` 的 tag 已带上完整版本，此后从最新 tag checkout 不再缺内容；残留的只有 `v1.3.0` 那个 tag。
    **`v1.4.0` 起不再有这个问题**：CHANGELOG 段在打包前写好，`publish.py` 直接从它截取。
+9. **采集进程曾无日志消失（2026-11-06 一次，原因未定位）**：`D:\What-IDid` 的心跳停在 14:55:01，
+   daemon 日志没有退出记录、Windows 应用事件日志无崩溃、也没有 `state/PAUSED` 标记，进程直接不在了。
+   时刻与一次 `harness.py check` 重合，但**已排除这个嫌疑**：15:34 又跑了一次完整 `harness.py check`，
+   采集（pid 18852）全程存活、心跳照常刷新。所以原因仍未定位，别据此改测试。
+   代价是 14:55–15:22 那段没有采集（当天第三段断档）。
+   判断办法：把 `state/heartbeat.json` 的 `ts` 与现实时间比，超过 2 分钟即视为已停；
+   日志看 `logs/daemon-*.log` 末尾。复现时先记录当时的命令行环境与是否有其他程序在动
+   `D:\What-IDid`，再决定归因。
 
 ## 下一步
 
-1. **发 `v1.4.0`**：产物已在 `release/v1.4.0/`；打 tag 与建 GitHub Release 由 iMac 侧做
-   （本机无凭据）。Release 正文用 `release/v1.4.0/RELEASE_NOTES.md`，资产上传那个 zip。
-2. **换生产实例**：`D:\What-IDid` 目前跑 1.3.1。换 1.4.0 时保留 `data/` 与 `reports/`，
-   替换后跑一次 `doctor --full`，确认采集心跳恢复。
-3. **观察日报本身，而不是加功能**：这是软件唯一的核心。重点看证据档位——有无把「看」写成「写」、
+1. **观察日报本身，而不是加功能**：这是软件唯一的核心。重点看证据档位——有无把「看」写成「写」、
    有无把群消息写成「我参与了」；有偏差按 `agents/decisions.md` 的 D-08 调 prompt，不加特例。
-4. **新需求先过准入判据**（D-19）：它是在记录「我做了什么」，还是在管理「这些内容是什么」？
+2. **留意采集是否再次无日志消失**（已知问题 9）：先从 `state/heartbeat.json` 的 `ts` 判断有没有停，
+   停了就用 WMI 拉起（`start` 在会话边界会被回收），别等 21:00 出报时才发现当天数据是断的。
+3. **新需求先过准入判据**（D-19）：它是在记录「我做了什么」，还是在管理「这些内容是什么」？
    后者不进这个软件——这是本次收窄留下的唯一长期规则。
+4. **可选清理**：`release/` 下九个版本各约 111 MB（合计约 1 GB），GitHub 上有资产；
+   删本地旧版本不影响任何人，但删掉就没有离线兜底，要不要清理由人定。
