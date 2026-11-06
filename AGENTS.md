@@ -88,39 +88,10 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 | `evaluator-rubric.md` / `quality-document.md` | 独立评审打分；重要会话后调质量评级 |
 | `graph.md` | 想引入自动循环、并行或步骤恢复之前 |
 | `agents/architecture.md` | 要改数据流、加模块、动 block/segment/refs 结构时 |
+| `agents/layout.md` | 找某个文件在哪、判断一条路径是否属于仓库、共享盘上文件长期显示 `M` 时 |
 | `agents/conventions.md` | 写新代码、动 i18n、加配置项、改模板时 |
 | `agents/verification.md` | 决定「这次改动该跑哪些自测」时 |
 | `agents/environment.md` | 跑不起来、OCR 不工作、计划任务/路径/代理出问题时 |
 | `agents/workflow.md` | 要发布、要转载到 `W:`、要打 zip、要升版本时 |
 | `agents/decisions.md` | 想推翻某个设计（锁、分段、证据档位、文件名策略）之前 |
 
-## 仓库地图
-
-```
-.                          ← 仓库根（本文件所在处）
-├── wid.py                 ← 单入口：23 个子命令（无参数即界面），也是打包后的唯一 exe
-├── src/                   ← 34 个模块（含 i18n 词条表），见 agents/architecture.md 的分层表
-│   ├── templates/         ← Jinja2：day / index / report.md / _style
-│   └── refs/              ← 文档引用解析（providers / extract / resolve）
-├── scripts/               ← harness、build_dist、check_privacy、check_boundaries、dev_fixture…
-├── feature_list.json      ← 机器可读功能状态；只能由 scripts/harness.py 改状态
-├── init.sh                ← 依赖 + 完整检查 + 标准启动入口
-├── sprint-contract.md     ← 冲刺目标、范围、验证标准、排除项与停止条件
-├── clean-state-checklist.md   ← 收尾逐项自检
-├── session-handoff.md     ← 长会话交接（短会话写 PROGRESS.md 即可）
-├── evaluator-rubric.md    ← 独立验收评分表
-├── quality-document.md    ← 各区域质量快照（变强还是变弱）
-├── graph.md               ← 单循环路由蓝图与图化升级判据
-├── docs/                  ← 面向使用者的双语文档（会打进发布包）
-├── agents/                ← 本目录：给 agent 看的工程文档（不打包）
-├── requirements.txt       ← 运行与构建依赖的版本基线
-├── config.default.yaml    ← 配置模板（入库）；config.yaml 是本机实际配置（不入库）
-└── data/ reports/ web/ state/ logs/ dist/   ← 运行产物，全部 .gitignore，克隆里没有
-```
-
-**本机（所有者机器）额外多出来的东西，克隆里不存在**：工作副本 `dev/`、发布产物 `release/v<版本>/`、
-打包脚本 `publish.py`、工作区分工说明 `WORKSPACE.md`、生产实例 `D:\What-IDid`、SMB 上的提交源
-`W:\What-I-Did`。要从头复现发布流程，凭仓库里的 `agents/workflow.md` 第五节即可，不需要这些文件。
-
-若 `git status --short` 里出现上表文件是未跟踪（`??`）或已修改（`M`），只说明**本机改动还没经提交侧入库**：
-以磁盘为准继续工作，不要回退、不要重建、也不要据此认为文档失实；入库流程见 `agents/workflow.md`。
