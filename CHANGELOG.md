@@ -21,9 +21,12 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
-## [Unreleased]
+## [v1.3.1] - 2026-11-06
 
 ### English
+
+A one-item patch for the build released an hour earlier: with review mode on, the approve
+step could not be clicked.
 
 #### Fixed
 
@@ -33,13 +36,30 @@ Chinese (`### English` / `### 中文`).
   approve/discard step was unreachable. Those actions now sit on their own row — a narrow window
   trims the badges instead of hiding the confirmation.
 
+#### Notes
+
+- Drop-in upgrade: replace `What-IDid.exe` and `_internal/`, keep your data where it is.
+  Nothing to migrate and no config change.
+- The bug only showed up with review mode on (`report.review_mode: true`). If you never turned
+  it on, this patch changes nothing you would notice — and upgrading is still worth it before
+  you do turn it on.
+
 ### 中文
+
+针对一小时前那一版的单点修补：开着审核模式时，确认外发这一步点不动。
 
 #### 修复
 
 - **审核入口不会再被挤出屏幕。** 徽章比卡片宽时，当天的操作按钮会被挤出这一行：
   1080 宽窗口下「审核待发内容」实测只有 1×1、点不到，等于没法确认外发。
   现在操作按钮单独占一行，窗口窄也只裁徽章，不会藏掉确认步骤。
+
+#### 说明
+
+- 直接覆盖升级：替换 `What-IDid.exe` 与 `_internal/` 即可，数据原地不动，不需要迁移、
+  不需要改配置。
+- 这个缺陷只在审核模式打开时出现（`report.review_mode: true`）。没开过的，这一版行为
+  和上一版没有可见差异；但仍建议在打开它之前先升上来。
 
 ## [v1.3.0] - 2026-11-06
 

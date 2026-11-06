@@ -34,7 +34,7 @@ import privacy
 import status
 import timeutil
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 TITLE = t("What-IDid · Work Log")
 
 # 托盘菜单命令号（任意唯一整数即可）
