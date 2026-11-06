@@ -68,8 +68,9 @@ OpenAI SDK（一个 POST）、Flask（静态 HTML）。
 
 ## D-11 `dev/` 不提交，`W:` 才是提交源（2026-10）
 **决策**：`dev/` 只改和验，提交统一在 iMac 侧对 `W:\What-I-Did` 做。
-**原因**：`W:` 共享对 Windows 侧不可写已有文件（`Permission denied`），git 在那边写不了对象；
-Windows 侧也没有 git 凭据。
+**原因**：`W:` 共享对 Windows 侧**不能改名与删除**，而 git 提交要 write-temp + rename，所以在那边
+提不了交；Windows 侧也没有 git 凭据。（早期把原因写成「不可写已有文件」，2026-11-06 实测可原地
+覆盖；决策本身不变。）
 **否决**：在 Windows 侧配凭据直接 push（用户明确不在 Windows 侧提权）。
 **约束**：改动一律 `cp` 成 `.new`；`release/` 只由 `publish.py` 写；zip 不进 git。
 

@@ -21,7 +21,7 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
-## [v1.3.0] - 2026-11-05
+## [v1.3.0] - 2026-11-06
 
 ### English
 
@@ -76,6 +76,11 @@ entirely on your machine, and off until you turn it on.
   the rest of that day and removed by `forget` together with it.
 - Days captured before this version have no line positions, so the address-bar fallback
   only starts working on new captures.
+- Your existing `config.yaml` keeps working as it is: the three new switches take their
+  defaults automatically, so there is nothing to add by hand — and until you turn history
+  reading on, this release behaves like the previous one.
+- The bundle already contains the SQLite component needed to read browser history. Nothing
+  extra to install: no Python, no library, no separate download.
 
 ### 中文
 
@@ -116,6 +121,9 @@ entirely on your machine, and off until you turn it on.
 - 不上传任何内容，截图不出本机。存下来的只有你本来就已经打开的页面网址，写在
   `data/<日>/urls.jsonl`，与当天数据同一套保留周期，`forget` 一并删除。
 - 本版之前采集的日期没有行坐标，地址栏兜底要等新采集才会生效。
+- 现有的 `config.yaml` 照旧可用：三个新开关自动按默认值生效，不用手工往里加；
+  在你自己打开历史读取之前，这一版的行为和上一版完全一样。
+- 绿色版已内置读取浏览历史所需的 SQLite 组件，不用另外装 Python、装库或单独下载。
 
 ## [v1.2.2] - 2026-11-05
 

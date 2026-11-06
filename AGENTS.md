@@ -20,7 +20,7 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 | **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 34 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
 | **怎么运行** | `python wid.py` 开界面；`wid.py daemon` 常驻采集；`wid.py report --date YYYY-MM-DD --no-open` 手动出某天报告 | `agents/environment.md` |
 | **怎么验证** | 先跑 `scripts/harness.py check`（Harness 自测 + 隐私 + 隔离 E2E）；发版前 `doctor --full`，必要时按改动加跑 DPI / GUI 回归 | `agents/harness.md`、`agents/verification.md` |
-| **现在进度如何** | v1.2.2 已发布；**v1.3.0（来源链接）代码完成、自测全绿，产物已落 `release/`，tag 未打** | `PROGRESS.md` |
+| **现在进度如何** | v1.2.2 已发布；**v1.3.0 已入库并打 tag（`753084c`），GitHub Release 待建** | `PROGRESS.md` |
 
 ## 常用命令
 
@@ -59,7 +59,8 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
    不重新 import）。
 8. **本机流程**：所有者机器上只有工作副本 `dev/` 用于改和验，**不做 `git commit` / `push` / `tag`**；
    提交在 `W:\What-I-Did`（iMac 侧）。通用原则是：自测没全绿不提交，提交里不夹带运行产物。
-9. **本机流程**：`W:` 共享对 Windows 侧只允许新建——改动一律 `cp` 成 `<name>.new`，由 iMac 侧 `mv -f` 覆盖。
+9. **本机流程**：`W:` 共享对 Windows 侧**不能改名/删除**（`git` 的 write-temp+rename 因此必失败）——
+   改动一律 `cp` 成 `<name>.new`，由 iMac 侧 `mv -f` 覆盖。普通文件可以原地覆盖，但覆盖会丢可执行位。
    成批改动（十几项以上）改打 `tar.gz` 一次性投放，iMac 侧 `tar -xzf` 解包，比逐个 `mv` 不易漏。
 10. **zip 永不进 git**（110 MB 超单文件限制），出口是 GitHub Release 资产。
 11. **新增 `src/*.py` 必须同步加进 `build.spec:MODULES`**（`i18n*.py` 由 glob 自动收集）。

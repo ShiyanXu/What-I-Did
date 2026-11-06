@@ -12,7 +12,7 @@
 | 仓库（本目录） | 唯一的源码与文档来源 | 改代码、跑自测、构建 |
 | `dev/`（本机） | 所有者机器上的工作副本，内容与仓库同构 | 同上；**禁止 commit / push / tag** |
 | `release/v<版本>/`（本机） | 不可变产物：zip + `SHA256SUMS.txt` + `RELEASE_NOTES.md` | 只由发布脚本写入，写完不再改 |
-| `W:\What-I-Did\`（本机） | 提交源，iMac 侧 `git` 工作区 | Windows 侧只能**新建**文件（`.new`）；`mv` / commit / push 由 iMac 侧做 |
+| `W:\What-I-Did\`（本机） | 提交源，iMac 侧 `git` 工作区 | Windows 侧**不能改名/删除**（可原地覆盖，但会丢 x 位）；改动用 `.new` 中转，`mv` / commit / push 由 iMac 侧做 |
 
 `WORKSPACE.md` 是所有者机器上对这张表的展开说明，不在仓库内；本表已覆盖它的信息。
 

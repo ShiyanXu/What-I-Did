@@ -90,9 +90,12 @@ Start-ScheduledTask -TaskName WhatIDid-LaunchGui    # 拉起界面
 |---|---|
 | 改代码、跑自测、重建 dist、打 zip、`cp` 到 `W:` 成 `.new`、换 `D:\What-IDid`、清 `.old` | `mv -f *.new`、`git add/commit/push`、`git tag` 及推送、GitHub Release 建版与上传 |
 
-`W:` 是 SMB 共享（`\\10.52.26.80\...`），对 Windows 侧**只允许新建、不允许覆盖或删除**。
-不是权限位、不是占用、不是沙箱——`chmod`、杀 `TGitCache`、换路径都无效。所以 `dev/` 不能放到 `W:`，
-git 在那边写不了对象。
+`W:` 是 SMB 共享（`\\10.52.26.80\...`），对 Windows 侧**不允许改名与删除**，但允许新建文件，
+也允许对已有文件原地覆盖或追加（2026-11-06 实测：`cp` 覆盖已提交的 `AGENTS.md`，`md5` 一致）。
+git 提交要 write-temp + rename，所以在那边 commit / push 必失败，`dev/` 也就不能放到 `W:`。
+约定上改动仍走 `.new` 中转，不是因为写不进去：覆盖会丢可执行位（`init.sh` 就这么从 100755
+变成 100644），而 `mv -f` 保住权限位、且是原子的。路径大小写必须写准——`What-IDid` 能 `ls`
+却 `cd` 不进、写入报 No such file。
 
 ## 七、常见坑
 

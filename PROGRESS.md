@@ -2,7 +2,7 @@
 
 > **这是唯一的进度事实来源。** 新会话从这里接续，不要凭记忆或聊天记录猜。
 > 维护规则：每次会话结束前更新本文件；只写事实与下一步，不写过程感想。
-> 最后更新：2026-11-06 10:05
+> 最后更新：2026-11-06 10:30
 
 ## 当前状态
 
@@ -15,21 +15,29 @@
   写死「干净」立刻过期；一律现跑 `git status --short` 判断，把它的输出当唯一依据。
 - **tag**：`v1.2.2`（附注标签 `85b0c67`）指向代码提交 `1a6d251`；文档纠偏提交 `227935c` 在它之后，
   所以 tag 不含这套文档——这是有意的，tag 标记的是产物来源，不是最后的文档状态。
-  **`v1.3.0` 尚未打 tag**，等 iMac 侧提交后由用户打
-- **v1.3.0 状态**：代码完成、`check_privacy` 110 项 + `check_boundaries` 27 项全绿；
-  产物在 `release/v1.3.0/`；**未提交、未推、未打 tag、未建 Release**
+  `v1.3.0`（附注标签）指向 `753084c` 并已推送；此后又补了 CHANGELOG 与本节的状态修正，
+  同样**不在 tag 内**——沿用 v1.2.2 的做法，tag 只标记产物来源。
+- **v1.3.0 状态**：代码已入库（`753084c`）、已推送、tag 已打；产物在 `release/v1.3.0/`。
+  **GitHub Release 尚未创建**——建完之后这一版才算发出去。
 - **已发布**：GitHub Release `v1.2.2`（<https://github.com/ShiyanXu/What-I-Did/releases/tag/v1.2.2>），
   资产 `What-IDid-win64-1.2.2-20261105.zip`（116,130,117 字节 / 1104 条目 / sha256 `36f1d3c4…df1e`，
   与 `release/v1.2.2/SHA256SUMS.txt` 一致）
-- **自测**：`check_privacy` 110/110、`check_boundaries` 27/27（2026-11-06 09:55 实跑，
-  边界项在隔离 `WID_HOME` 的夹具日上跑）；
-  DPI 与 GUI 回归 1.2.2 未跑，1.3.0 亦未跑
+- **自测**：`scripts/harness.py check` 全绿（2026-11-06 10:25 实跑，`exit_code=0`）——
+  它一次跑完静态校验、Harness 自测、隐私检查、隔离 E2E；**项数随分支浮动，以命令输出为准，
+  本文件不写死数字**（同一天就有过一次 104→110 的增长）。
+  DPI 与 GUI 回归 1.2.2 未跑，1.3.0 亦未跑（原因见「已知问题 1」）
 - **文档**：`AGENTS.md`、本文件、`agents/` 下专题首次入库于 `888c30f`；两轮「克隆后五问」纠偏在
   `227935c`；此后只有本文件自身的措辞补正，不再单列提交号
 - **生产实例**：`D:\What-IDid` 已换 v1.3.0（历史数据保留），采集由计划任务 `WhatIDid-Recorder`
   拉起，心跳正常
-- **未收尾的元信息**：`release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit`
-  写的是 `1e4a5ed`，应为 `1a6d251`（tag 实际目标）。本地文件可直接改，网页需人工改。
+- **未收尾的元信息**：
+  - `release/v1.2.2/RELEASE_NOTES.md` 与 GitHub Release 正文的 `Source commit` 写的是 `1e4a5ed`，
+    应为 `1a6d251`（tag 实际目标）。本地文件可直接改，网页需人工改。
+  - `release/v1.3.0/RELEASE_NOTES.md` 是**手工修正**的：`Source commit` 由 `883320c` 改成 `753084c`，
+    `Self-tests` 行改为 harness 口径，Notes 各补两条（旧 `config.yaml` 照旧可用、绿色版已内置 SQLite）。
+    手工的原因当时是「不改 CHANGELOG、不动 tag」；后来 CHANGELOG 已在 tag 之后补上同样两条，
+    所以现在重跑 `publish --force` 生成的正文与这份一致，只有 `Built` 时间与 `Source commit`
+    （届时取当时的 HEAD）会不同——重跑前先想清楚要不要这两个值变。
 
 **自查（不要只信上面的断言，直接跑）**：
 
@@ -37,8 +45,9 @@
 git status --short                              # 必须为空
 git rev-list --left-right --count @{u}...HEAD   # 必须是 "0	0"（不领先也不落后）
 git rev-parse v1.2.2^{commit}                   # 应为 1a6d251，tag 不会移动
-git tag -l "v1.2*"                              # 应含 v1.2.2
-PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_boundaries.py
+git rev-parse v1.3.0^{commit}                   # 应为 753084c，tag 不会移动
+git tag -l "v1.3*"                              # 应含 v1.3.0
+PY=.../Python310/python.exe; $PY scripts/harness.py check   # 一次跑完静态+Harness+隐私+隔离E2E
 ```
 
 **不在仓库里、只能现场查的**：`D:\What-IDid` 的运行状态与心跳、`dist/` 是否比源码旧、
@@ -72,6 +81,9 @@ PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_b
       修的类别：`dev/` 根假设、已过期的进度摘要、计划任务条数、「正式采集不 OCR」、`scripts/*` 的
       `.build/` 过期路径、写死的回归项数、`publish.py` / `WORKSPACE.md` 的本机引用；
       另补 `requirements.txt`（9 个包按实测版本钉住）并让 `build_dist.py` 按它安装。
+- [x] **v1.3.0 入库与打 tag**（2026-11-06）：`7f4e02c`（Harness）、`753084c`（v1.3.0），
+      附注标签 `v1.3.0` 已推送。随后补的 CHANGELOG 与本文件修正不在 tag 内（沿用 v1.2.2 的取舍）。
+      **GitHub Release 尚未创建**——发版链路的最后一环。
 
 ## 进行中
 
@@ -89,8 +101,13 @@ PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_b
 2. **`src/paths.py:56-60` 有一段等价分支**：带 `portable.marker` 的分支与紧随其后的「可写就用程序目录」
    返回同一个值，marker 实际不起作用；`docs/architecture*` 也只写了三级路径、没提这个 marker。
    要么删掉分支，要么让 marker 真能强制便携。改它要重建 dist，留到下次动 `paths.py` 时一起做。
-3. **`W:` 共享对 Windows 侧不可写已有文件**（`Permission denied`，非权限位、非占用），
-   所以所有改动只能以 `.new` 中转，由 iMac 侧 `mv -f`。
+3. **`W:` 共享的权限边界（实测修正，原表述「不可写已有文件」是错的）**：根目录可写可删；
+   仓库子目录允许**新建文件**，也允许对已有文件**原地截断写/追加**；真正被禁的是**改名与删除**
+   ——git 提交要 write-temp + rename，所以 Windows 侧 commit / push 必失败。
+   改过的文件过去一律用 `.new` 中转，是当初误判「不可写」时留下的习惯；普通文件可以直接覆盖，
+   但覆盖会丢可执行位（`init.sh` 就这么从 100755 变成 100644，工作区因此显示脏），
+   有 x 位的文件仍走 `.new` + iMac 侧 `mv -f`。路径大小写也要写准：`What-IDid` 能 `ls`
+   却 `cd` 不进、写入报 No such file。
 4. **Windows 侧无 git 凭据**，push / tag / GitHub Release 只能 iMac 侧做。
 5. **同步是手动的**（`git fetch && git reset --mixed`）。推送后不归零，下次改动的 diff 里会混进旧提交。
 6. **本文件依赖人/agent 主动更新**，没有任何自动检查会发现它过期。已经错过三次：
@@ -104,22 +121,19 @@ PY=.../Python310/python.exe; $PY scripts/check_privacy.py && $PY scripts/check_b
    与 `build_dist.py`（不进包），唯一进包的是 `config.default.yaml` 里的一行注释——注释只影响
    「首次运行生成 config.yaml」时的可读性，不影响任何行为。所以不重打包：同一版本号换资产会让
    已发布的 sha256 失效，代价大于收益。下一次因代码升版时才自然带上。
-9. **本机**：`release/v1.3.0/RELEASE_NOTES.md` 的 `Source commit` 写的是 `883320c`，而该提交里
-   没有 `src/browse.py`、`src/gui.py` 还是 `1.2.2`——v1.3.0 代码尚未入库，产物无法从该提交复现。
-   入库后必须回填真实提交号；在那之前不要把 v1.3.0 当成可复现版本。
-10. **本文件与 `feature_list.json` 是两条独立维护的线，没有脚本比对**：产品行为可以在本文件里
-    标成已完成，而功能项仍是 `not_started`（`source-links-001` 现在就是这种状态）。
-    **功能状态一律以 `harness.py status` 为准**，本文件只记项目级事实，不复制状态计数。
+9. **本文件与 `feature_list.json` 是两条独立维护的线，没有脚本比对**：产品行为可以在本文件里
+   标成已完成，而功能项仍是 `not_started`（曾经 `source-links-001` 就是这样，现在已登记）。
+   **功能状态一律以 `harness.py status` 为准**，本文件只记项目级事实，不复制状态计数。
 
 ## 下一步
 
-1. 把 `source-links-001` 登记成证据：`harness.py start source-links-001` → `harness.py verify source-links-001`
-   （它的验证命令就是隐私自测里的来源链接用例，当前已通过）。
+1. **建 GitHub Release `v1.3.0`**——这是唯一还差的一步：tag 已存在，直接选 `v1.3.0`；
+   正文粘贴 `release/v1.3.0/RELEASE_NOTES.md` 全文；资产上传
+   `What-IDid-win64-1.3.0-20261106.zip`（116,983,623 字节 / 1106 条目 / sha256 `297b73b1…95c2`）。
+   建完之后把上面「已发布」一段从 `v1.2.2` 换成本版。
 2. 跑 `verify_dpi.py` 与 `gui_regression.py`：先 `wid.py pause`（否则测试会污染当天日报），
    `WID_HOME` 必须是 `.tmp_wid*`，跑完 `wid.py resume`，把通过/失败数记进本节。
    走 Harness 时对应 `harness.py resume gui-001 --reason "..."` → `harness.py verify gui-001`，
    证据由脚本写入，不手写 passing。
-3. 观察 2026-11-05 的终版日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
+3. 观察 11-06 起的日报是否守住证据档位（重点看有无把「看」写成「写」、有无把群消息写成
    「我参与了」）；若仍有偏差，按 `agents/decisions.md` 的 D-08 调 prompt，而不是加特例。
-4. 提交侧入库时按 `agents/workflow.md` 走，并回填 `release/v1.3.0/RELEASE_NOTES.md` 的
-   `Source commit`（已知问题 9）。
