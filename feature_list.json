@@ -1,0 +1,246 @@
+{
+  "project": "What-IDid",
+  "last_updated": "2026-11-06",
+  "rules": {
+    "single_active_feature": true,
+    "passing_requires_evidence": true,
+    "do_not_skip_verification": true,
+    "passing_is_immutable": true,
+    "verification_controls_state": true
+  },
+  "status_legend": {
+    "not_started": "功能还没开始做。",
+    "in_progress": "当前唯一正在推进的功能；验证失败时保持此状态。",
+    "blocked": "存在已记录的阻塞，解除前不能调度。",
+    "passing": "验证命令全部成功，且证据已由 scripts/harness.py 写入。"
+  },
+  "features": [
+    {
+      "id": "privacy-001",
+      "priority": 10,
+      "area": "privacy",
+      "title": "敏感信息在采集、模型出口与分享链接中脱敏",
+      "user_visible_behavior": "密钥、手机号、身份证和邮箱不会进入模型请求或分享版来源链接。",
+      "status": "passing",
+      "verification": [
+        "运行隐私边界自测。",
+        "确认采集、模型出口、HTTP 出口和来源链接相关检查全部通过。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/check_privacy.py"
+        ]
+      ],
+      "evidence": [
+        {
+          "recorded_at": "2026-11-05T10:29:56.950Z",
+          "commands": [
+            {
+              "command": [
+                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "scripts/check_privacy.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 1219.0,
+              "log_path": "state/harness/20261105T102955.712990Z-91c037a3-605a23b76bcf.log"
+            }
+          ],
+          "trace_path": "state/harness/20261105T102955.712990Z-91c037a3.jsonl",
+          "summary": "1/1 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "完整日志保存在本机 state/harness/，不进入 git。",
+      "depends_on": []
+    },
+    {
+      "id": "report-001",
+      "priority": 20,
+      "area": "report",
+      "title": "离线样本可以跑通完整日报链路",
+      "user_visible_behavior": "没有模型 Key 时，合成数据仍能经过采集块、行为、摘要、校验和渲染生成日报。",
+      "status": "passing",
+      "verification": [
+        "在临时 WID_HOME 中生成合成样本并调用假模型。",
+        "在同一隔离环境运行模块边界自测。",
+        "退出后自动清理临时数据。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/harness.py",
+          "e2e"
+        ]
+      ],
+      "evidence": [
+        {
+          "recorded_at": "2026-11-05T10:30:02.965Z",
+          "commands": [
+            {
+              "command": [
+                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "scripts/harness.py",
+                "e2e"
+              ],
+              "exit_code": 0,
+              "duration_ms": 2266.0,
+              "log_path": "state/harness/20261105T103000.683677Z-0a9e07f3-dbd8a08c8c81.log"
+            }
+          ],
+          "trace_path": "state/harness/20261105T103000.683677Z-0a9e07f3.jsonl",
+          "summary": "1/1 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "不读取或覆盖生产数据。",
+      "depends_on": []
+    },
+    {
+      "id": "source-links-001",
+      "priority": 30,
+      "area": "sources",
+      "title": "来源链接遵守脱敏、降级和分享规则",
+      "user_visible_behavior": "历史、地址栏和仅域名三级来源不会泄露敏感参数，分享版不保留 query。",
+      "status": "passing",
+      "verification": [
+        "运行隐私边界自测中的来源链接用例。",
+        "确认敏感参数、地址栏识别、域名降级和分享去 query 均通过。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/check_privacy.py"
+        ]
+      ],
+      "evidence": [
+        {
+          "recorded_at": "2026-11-06T02:09:40.092Z",
+          "commands": [
+            {
+              "command": [
+                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "scripts/check_privacy.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 1344.0,
+              "log_path": "state/harness/20261106T020938.730149Z-05c3aa8b-e592ee2fa265.log"
+            }
+          ],
+          "trace_path": "state/harness/20261106T020938.730149Z-05c3aa8b.jsonl",
+          "summary": "1/1 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "本项只证明链接逻辑，不代替 GUI 或打包版端到端回归。",
+      "depends_on": [
+        "privacy-001"
+      ]
+    },
+    {
+      "id": "harness-001",
+      "priority": 40,
+      "area": "harness",
+      "title": "新会话可以初始化、单功能推进并留下验证轨迹",
+      "user_visible_behavior": "全新会话只读仓库即可知道如何初始化、选择任务、验证和交接，且不能无证据标记 passing。",
+      "status": "passing",
+      "verification": [
+        "运行 Harness 自测。",
+        "检查 WIP=1、依赖门控、失败不通过、passing 不可逆和 trace 可解析。",
+        "运行完整 Harness 检查并确认标准启动命令被打印。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/check_harness.py"
+        ]
+      ],
+      "evidence": [
+        {
+          "recorded_at": "2026-11-05T10:30:10.205Z",
+          "commands": [
+            {
+              "command": [
+                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "scripts/check_harness.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 2109.0,
+              "log_path": "state/harness/20261105T103008.084876Z-565bf842-182a75b2e787.log"
+            }
+          ],
+          "trace_path": "state/harness/20261105T103008.084876Z-565bf842.jsonl",
+          "summary": "1/1 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "不引入第三方依赖，不自动 commit/push。",
+      "depends_on": [
+        "privacy-001",
+        "report-001"
+      ]
+    },
+    {
+      "id": "harness-002",
+      "priority": 45,
+      "area": "harness",
+      "title": "阻塞可恢复，且验证命令不得夹带凭据",
+      "user_visible_behavior": "被阻塞的功能解除后能回到 in_progress 而不绕过 WIP/依赖门控；把 API Key 写进验证命令会被当场拒绝。",
+      "status": "passing",
+      "verification": [
+        "运行 Harness 自测，覆盖 resume 的状态与门控用例、凭据静态拦截用例。",
+        "确认失败时返回非零，且不写出通过证据。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/check_harness.py"
+        ]
+      ],
+      "evidence": [
+        {
+          "recorded_at": "2026-11-05T10:39:50.169Z",
+          "commands": [
+            {
+              "command": [
+                "C:\\Users\\xushiyan\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                "scripts/check_harness.py"
+              ],
+              "exit_code": 0,
+              "duration_ms": 2235.0,
+              "log_path": "state/harness/20261105T103947.925266Z-eafd4ac6-695a2dce2372.log"
+            }
+          ],
+          "trace_path": "state/harness/20261105T103947.925266Z-eafd4ac6.jsonl",
+          "summary": "1/1 条验证命令成功，退出码均为 0"
+        }
+      ],
+      "notes": "harness-001 的证据记录于 23 项测试的版本；本项覆盖其后新增的 resume、WIP/依赖复核与凭据拦截。",
+      "depends_on": [
+        "harness-001"
+      ]
+    },
+    {
+      "id": "gui-001",
+      "priority": 50,
+      "area": "gui",
+      "title": "四页界面通过 DPI 与合成点击回归",
+      "user_visible_behavior": "界面在高 DPI 和中英文切换下保持控件可用、布局一致。",
+      "status": "blocked",
+      "verification": [
+        "先暂停采集，避免测试窗口污染当天日报。",
+        "在刚生成的隔离 WID_HOME 中运行 DPI 与 GUI 回归。",
+        "记录实际通过/失败项，再恢复采集。"
+      ],
+      "verification_commands": [
+        [
+          "{python}",
+          "scripts/verify_dpi.py"
+        ],
+        [
+          "{python}",
+          "scripts/gui_regression.py"
+        ]
+      ],
+      "evidence": [],
+      "notes": "阻塞：需要先 wid.py pause，并按 agents/verification.md 准备全新隔离 WID_HOME；本轮 Harness 建设未执行 GUI 测试。",
+      "depends_on": []
+    }
+  ]
+}
