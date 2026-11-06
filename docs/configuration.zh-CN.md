@@ -108,6 +108,30 @@ ui:
 
 `sk-`、GitHub token（含 `github_pat_`）、身份证、手机号、邮箱有不可关闭的内置规则。正则不能识别全部敏感内容，也不会给截图像素打码——敏感应用请屏蔽或暂停。
 
+## 来源链接 `browse`、`url`、`share`
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `browse.history.enabled` | `false` | 出报时读本机 Chrome/Edge 历史，把访问过的网址挂到对应网页块。**默认关闭**，在「设置 → 来源链接」里开 |
+| `browse.history.browsers` | `["chrome", "edge"]` | 读哪些浏览器。校验器接受 `firefox`，但本期未实现 |
+| `browse.history.profiles` | `auto` | `auto` 会扫 `Default` 与浏览器 `User Data` 下的每个 `Profile *` |
+| `browse.history.lookback_sec` | `3600` | 块内没有访问记录时向前找多久。读一篇 30 分钟的文章只在开头留一次访问，所以这个窗很关键：真实一天里 60 分钟命中 86%，只给 30 秒只有 40% |
+| `browse.history.ahead_sec` | `30` | 块结束后多少秒内的访问仍算数 |
+| `browse.history.max_urls_per_block` | `3` | 每块链接数上限；只保留与最优分接近的那几条 |
+| `browse.history.copy_timeout_sec` | `5` | 历史库被浏览器锁着，先拷到 `state/tmp` 再读；这是拷贝超时 |
+| `browse.address_bar.enabled` | `true` | 历史里没命中时，从截图顶部条带里读网址。只对保存了行坐标的采集有效 |
+| `browse.address_bar.top_ratio` | `0.15` | 窗口高度里算作「顶部条带」的比例 |
+| `browse.domain_only.enabled` | `true` | 最后的兜底：只留 `https://<host>/` 并标 `（仅域名）`，而不是整条链接丢掉 |
+| `url.keep_query` | `true` | 本地日报保留网址参数，仅对敏感参数打码 |
+| `url.strip_tracking` | `false` | 连本地日报也去掉跟踪参数（`utm_*`、`fbclid`、`gclid`、`spm` 等） |
+| `url.redact_secret_params` | `true` | 对 `token`、`session`、`code`、`auth`、`ticket` 这类参数打码；分享副本里不可关闭 |
+| `share.keep_query` | `false` | 分享副本是否保留网址参数。默认不要：参数里常带会话 id 和搜索词 |
+| `share.include_sources` | `false` | 分享副本是否列出每个块的来源链接 |
+
+「仅域名」这条兜底需要标题与 OCR 原文才能工作。微信默认在 `privacy.skip_ocr_apps` 里，两者都没有；飞书不在该名单，开箱即可用。
+
+读历史用 `sqlite3` 打开浏览器 `History` 文件的**副本**，只读；不回写，也不保留当日报表之外的历史条目。命中的网址落在 `data/<日>/urls.jsonl`，与当天数据同一套保留周期，`forget` 一并删除。图像始终不出本机——存下来的只是你本来就已经打开的页面网址。
+
 ## 保留与清理 `retention`
 
 | 键 | 默认 | 说明 |

@@ -48,8 +48,8 @@ set WID_HOME=%CD%\.tmp_wid_dev
 | 脚本 | 覆盖面 | 用法 |
 | --- | --- | --- |
 | `dev_fixture.py` | 造一天合成事件 + 假模型跑通全链路 | `python scripts\dev_fixture.py --day 2026-10-18 --mock`；`--clean` 删除 |
-| `check_privacy.py` | 隐私与配置失效 73 项：伪造凭据注入、关闭外发后零请求、暂停/锁屏/名单、名单收紧后重分块、OCR 地址校验、裁剪失败不抓屏、构建保护 | `python scripts\check_privacy.py` |
-| `check_boundaries.py` | 边界与异常路径 27 项：空关键词、日期越界、损坏 JSON、空周、重复补录、非法时间 | 需先有样本；`python scripts\check_boundaries.py` |
+| `check_privacy.py` | 隐私与配置失效：伪造凭据注入、关闭外发后零请求、暂停/锁屏/名单、名单收紧后重分块、OCR 地址校验、裁剪失败不抓屏、构建保护 | `python scripts\check_privacy.py` |
+| `check_boundaries.py` | 边界与异常路径：空关键词、日期越界、损坏 JSON、空周、重复补录、非法时间 | 必须先 `set WID_HOME=%CD%\.tmp_wid_test` 并造样本；未设置时直接返回 2 |
 | `verify_dpi.py` | DPI 与多屏 14 项：抓图尺寸 = 窗口矩形、跨屏原点偏移、全屏 = 虚拟桌面、坐标不一致时拒绝落盘 | `python scripts\verify_dpi.py` |
 | `gui_regression.py` | 点击级界面检查约 41 项（随分支浮动）：四页切换、补录校验、遗忘确认、审核发送/丢弃 | 先构建出 `dist/`，再用 `seed_gui_home.py` 准备环境 |
 | `seed_gui_home.py` | 一键准备 GUI 回归环境（只允许写 `.tmp_wid*`） | `python scripts\seed_gui_home.py .tmp_wid_gui` |

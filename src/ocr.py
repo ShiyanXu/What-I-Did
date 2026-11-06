@@ -50,6 +50,63 @@ class OcrResult:
     ms: int = 0
     engine: str = ""
     error: str = ""
+    # 1.3.0：窗口顶部条带的行坐标，供"认地址栏"用。只存顶部，不存全图坐标：
+    # 全存会把文本再存一遍（体积翻倍），而地址栏只在顶部。
+    lines: list = field(default_factory=list)     # [{"y0":, "y1":, "text":}]
+    height: int = 0                                # 截图高度（像素），用于把 y 换算成比例
+
+
+# 只保留窗口顶部这一段的行（标题栏 + 标签栏 + 地址栏都在这里）
+_TOP_STRIP_RATIO = 0.25
+_TOP_STRIP_MAX = 16
+
+
+def _box_y(box) -> tuple[float, float] | None:
+    """从 OCR 的 box 里取 y0/y1。兼容 4 点 [[x,y]...] 与扁平 [x,y,x,y,...] 两种写法。"""
+    if not isinstance(box, (list, tuple)) or not box:
+        return None
+    try:
+        if isinstance(box[0], (list, tuple)):
+            ys = [float(p[1]) for p in box if isinstance(p, (list, tuple)) and len(p) >= 2]
+        else:
+            vals = [float(x) for x in box]
+            ys = vals[1::2] if len(vals) >= 6 else []
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not ys:
+        return None
+    return min(ys), max(ys)
+
+
+def _blocks_of(payload) -> list[dict]:
+    """把 Umi 的返回摊平成 [{text, box}]，认不出结构就返回空。"""
+    if isinstance(payload, dict):
+        for key in ("data", "text", "result"):
+            if key in payload:
+                return _blocks_of(payload[key])
+        return []
+    if isinstance(payload, list):
+        return [it for it in payload if isinstance(it, dict)]
+    return []
+
+
+def _top_lines(items: list[dict], height: int) -> list[dict]:
+    """抽出顶部条带的行。没有可用坐标就返回空列表（调用方自动降级）。"""
+    if height <= 0 or not items:
+        return []
+    limit = height * _TOP_STRIP_RATIO
+    out: list[dict] = []
+    for it in items:
+        text = str(it.get("text") or "").strip()
+        if not text:
+            continue
+        ys = _box_y(it.get("box"))
+        if ys is None or ys[1] > limit:
+            continue
+        out.append({"y0": int(ys[0]), "y1": int(ys[1]), "text": text})
+        if len(out) >= _TOP_STRIP_MAX:
+            break
+    return out
 
 
 def _parse_payload(payload) -> str:
@@ -107,6 +164,10 @@ class BaseEngine:
     def recognize(self, img: Path, timeout: float) -> str:
         raise NotImplementedError
 
+    def recognize_rich(self, img: Path, timeout: float) -> tuple[str, list[dict], int]:
+        """返回 (文本, 顶部条带行, 图高)。默认不带坐标——引擎没坐标就自动降级。"""
+        return self.recognize(img, timeout), [], 0
+
 
 class UmiHttpEngine(BaseEngine):
     name = "umi_http"
@@ -132,7 +193,8 @@ class UmiHttpEngine(BaseEngine):
         except OSError:
             return False
 
-    def _post(self, img: Path, timeout: float) -> str:
+    def _post(self, img: Path, timeout: float):
+        """发一次识别请求，返回原始 payload（文本与坐标都从这里取）。"""
         import requests
 
         privacy.require_local_ocr_url(self.url)
@@ -155,9 +217,9 @@ class UmiHttpEngine(BaseEngine):
             code = payload.get("code")
             if code not in (100, 0, None):
                 raise OcrError(t("Umi-OCR returned a failure status (response body not recorded)"))
-        return _clean(_parse_payload(payload))
+        return payload
 
-    def recognize(self, img: Path, timeout: float = 0) -> str:
+    def _call(self, img: Path, timeout: float):
         import requests
 
         last: Exception | None = None
@@ -172,6 +234,19 @@ class UmiHttpEngine(BaseEngine):
                 break
         raise OcrError(t("OCR HTTP is unavailable ({err}; request details not recorded)",
                          err=type(last).__name__))
+
+    def recognize(self, img: Path, timeout: float = 0) -> str:
+        return _clean(_parse_payload(self._call(img, timeout)))
+
+    def recognize_rich(self, img: Path, timeout: float = 0) -> tuple[str, list[dict], int]:
+        payload = self._call(img, timeout)
+        text = _clean(_parse_payload(payload))
+        items = _blocks_of(payload)
+        if not items:
+            return text, [], 0
+        ys = [yy for it in items if (yy := _box_y(it.get("box"))) is not None]
+        height = int(max(y1 for _, y1 in ys)) if ys else 0
+        return text, _top_lines(items, height), height
 
 
 class UmiCliEngine(BaseEngine):
@@ -344,14 +419,21 @@ class RapidEngine(BaseEngine):
         return holder.get("out", "")
 
     def _recognize_inner(self, eng, img: Path) -> str:
+        return self._recognize_blocks(eng, img)[0]
+
+    def _recognize_blocks(self, eng, img: Path) -> tuple[str, list[dict]]:
+        """返回 (文本, [{text, box}])。box 可能缺失，调用方自行判断。"""
         out = eng(str(img))
         txts = getattr(out, "txts", None)
         scores = getattr(out, "scores", None)
+        boxes = getattr(out, "boxes", None)
         if txts is None and isinstance(out, tuple):   # 兼容 v2 的 (rows, elapse)
             rows = out[0] or []
             txts = [r[1] for r in rows if len(r) > 1]
             scores = [r[2] for r in rows if len(r) > 2]
+            boxes = [r[0] for r in rows if len(r) > 0]
         kept: list[str] = []
+        items: list[dict] = []
         for i, item_text in enumerate(txts or []):
             text = str(item_text).strip()
             if not text or _is_noise(text):
@@ -363,7 +445,50 @@ class RapidEngine(BaseEngine):
                 except (TypeError, ValueError):
                     pass
             kept.append(text)
-        return _clean("\n".join(kept))
+            if boxes is not None and i < len(boxes):
+                items.append({"text": text, "box": boxes[i]})
+        return _clean("\n".join(kept)), items
+
+    def recognize_rich(self, img: Path, timeout: float = 0) -> tuple[str, list[dict], int]:
+        text, items = self._call(lambda eng: self._recognize_blocks(eng, img), timeout)
+        if not items:
+            return text, [], 0
+        ys = [yy for it in items if (yy := _box_y(it.get("box"))) is not None]
+        height = int(max(y1 for _, y1 in ys)) if ys else 0
+        return text, _top_lines(items, height), height
+
+    def _call(self, fn, timeout: float):
+        """统一处理"超时放弃等待"的逻辑：底层 ONNX 调用无法中断，只能丢线程。"""
+        eng = self._instance()
+        timeout = float(timeout or 0)
+        if self._busy.is_set():
+            raise OcrError(t("The previous recognition has not returned yet; not accepting new tasks"))
+        if timeout <= 0:
+            self._busy.set()
+            try:
+                return fn(eng)
+            finally:
+                self._busy.clear()
+        holder: dict = {}
+
+        def work() -> None:
+            try:
+                holder["out"] = fn(eng)
+            except Exception as exc:  # noqa: BLE001 —— 原样交回调用方
+                holder["err"] = exc
+            finally:
+                self._busy.clear()
+
+        self._busy.set()
+        worker = threading.Thread(target=work, name="rapidocr-call", daemon=True)
+        worker.start()
+        worker.join(timeout)
+        if worker.is_alive():
+            # 线程还在跑：不清 _busy，让后续任务直接失败，直到它自然返回
+            raise OcrError(t("Recognition timed out after {n}s; gave up waiting", n=f"{timeout:.0f}"))
+        if "err" in holder:
+            raise holder["err"]
+        return holder.get("out")
 
 
 class InstanceManager:
@@ -690,8 +815,14 @@ class OcrQueue:
             return
         result = OcrResult(task.ocr_id, engine=engine.name)
         try:
-            text = engine.recognize(task.img, float(self.cfg.get("ocr.timeout_sec", 90)))
+            timeout = float(self.cfg.get("ocr.timeout_sec", 90))
+            if hasattr(engine, "recognize_rich"):
+                text, lines, height = engine.recognize_rich(task.img, timeout)
+            else:
+                text, lines, height = engine.recognize(task.img, timeout), [], 0
             result.text = self._trim(privacy.redact(text, cfg))
+            result.lines = list(lines or [])
+            result.height = int(height or 0)
             result.status = "ok" if result.text else "empty"
             self._consecutive_fail = 0
         except Exception as exc:
@@ -727,6 +858,12 @@ class OcrQueue:
         else:
             result.text = privacy.redact(result.text, cfg)
             result.error = privacy.redact(result.error, cfg)
+            # 顶部条带的文字同样是屏幕内容，必须走同一条脱敏规则
+            if result.lines:
+                result.lines = [
+                    {**ln, "text": privacy.redact(str(ln.get("text") or ""), cfg)}
+                    for ln in result.lines
+                ]
             app = privacy.redact(task.app, cfg)
         rec = asdict(result)
         rec.update(ts=time.time(), day=task.day, app=app)

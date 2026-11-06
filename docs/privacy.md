@@ -34,6 +34,21 @@ What-IDid records what is on your screen, and that deserves to be treated carefu
 
 The window rectangle is not app-level isolation: transparent backgrounds, overlays and sensitive content embedded inside a window still get captured. That kind of content is controlled with the blocklists or by pausing — the program cannot detect it for you.
 
+## Reading browser history
+
+Source links (v1.3.0) read the local Chrome/Edge history database, and that deserves its own paragraph rather than a bullet.
+
+| Question | Answer |
+| --- | --- |
+| Is it on by default? | **No.** `browse.history.enabled` is `false` until you turn it on in Settings → Source links |
+| What is opened? | The browser's `History` file (plus its `-wal`/`-shm` siblings) copied into `state/tmp`, opened with `sqlite3` in read-only mode, and deleted again after the query |
+| Which rows are kept? | Only visits inside the reported day (plus the look-back window used for matching). Visits from other days are read, filtered out and never written anywhere |
+| What is stored? | `data/<day>/urls.jsonl`: the URL, the page title as the browser recorded it, the timestamp, and which block it was matched to. Same retention as that day; `forget` deletes it with the rest |
+| What is *not* read? | Cookies, logins, form data, downloads, bookmarks, extensions, and anything outside `History`. Incognito sessions are not in the database at all |
+| Does it go to the model? | The URL does, in the same field where a link scraped from the screen would go, after normalization. Turn off `privacy.allow_llm` and nothing leaves at all |
+
+If the history has no matching visit, the fallback reads a URL out of the top strip of the screenshot (only for captures that stored line positions), and failing that keeps **only the host** and labels the chip `(domain only)`. The tool never guesses a path.
+
 ## The redaction chain
 
 The same rules apply at four points, and missing any one of them counts as a failure:

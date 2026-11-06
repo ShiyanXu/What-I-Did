@@ -32,6 +32,8 @@ def _derived_paths(day: str) -> list[Path]:
         paths.REPORTS / "share" / f"{day}-share.md",
         # v1.2 之前的旧命名，切过语言的机器上可能还留着
         paths.REPORTS / "share" / f"{day}-分享版.md",
+        # 1.3.0：来源链接是原始数据的派生物，报告删了它也必须删
+        paths.urls_path(day),
     ]
 
 
@@ -162,6 +164,18 @@ def _span_days(lo, hi, cutoff_hour: int) -> list[str]:
     return sorted(days)
 
 
+def _filter_urls(day: str, lo, removed: dict) -> int:
+    """来源链接按块开始时间过滤：与事件流同一时间口径。"""
+    try:
+        import browse
+    except Exception:  # noqa: BLE001
+        return 0
+    n = browse.forget_urls(day, lo.timestamp())
+    if n:
+        removed["urls"] = int(removed.get("urls", 0)) + n
+    return n
+
+
 def forget_minutes(minutes: int, cfg, log=None) -> dict:
     """删除最近 N 分钟的原始数据 + 受影响天的派生数据。"""
     minutes = int(minutes)
@@ -169,18 +183,20 @@ def forget_minutes(minutes: int, cfg, log=None) -> dict:
         raise ValueError(t("minutes must be between 1 and 10080 (one week)"))
     now = timeutil.now()
     lo = now - timedelta(minutes=minutes)
-    removed = {"events": 0, "shots": 0, "ocr": 0, "days": [], "derived": []}
+    removed = {"events": 0, "shots": 0, "ocr": 0, "urls": 0, "days": [], "derived": []}
     for day in _span_days(lo, now, cfg.cutoff_hour):
         changed = _filter_events(day, lo, now, removed)
         changed += _filter_ocr(day, lo, now, removed)
+        changed += _filter_urls(day, lo, removed)
         if changed:
             _drop_derived(day, removed["derived"])
             removed["days"].append(day)
     _drop_weekly(removed["days"], removed["derived"])
     _refresh_index(cfg)
     if log:
-        log.info("Forgot the last %d minutes: %d events / %d shots / %d OCR records removed, days: %s",
-                 minutes, removed["events"], removed["shots"], removed["ocr"],
+        log.info("Forgot the last %d minutes: %d events / %d shots / %d OCR / %d source links "
+                 "removed, days: %s",
+                 minutes, removed["events"], removed["shots"], removed["ocr"], removed["urls"],
                  ", ".join(removed["days"]) or "none")
     return removed
 

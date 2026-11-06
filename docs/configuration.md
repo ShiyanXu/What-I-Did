@@ -108,6 +108,30 @@ ui:
 
 `sk-`, GitHub tokens (including `github_pat_`), national ID numbers, phone numbers and emails have built-in rules that cannot be turned off. Regular expressions cannot recognize everything sensitive, and they do not blur pixels inside a screenshot — block or pause sensitive apps instead.
 
+## Source links `browse`, `url`, `share`
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `browse.history.enabled` | `false` | Read the local Chrome/Edge history at report time and attach the visited URL to each page block. **Off by default** — turn it on in Settings → Source links |
+| `browse.history.browsers` | `["chrome", "edge"]` | Which browsers to read. `firefox` is accepted by the validator but not implemented yet |
+| `browse.history.profiles` | `auto` | `auto` scans `Default` plus every `Profile *` under the browser's `User Data` |
+| `browse.history.lookback_sec` | `3600` | How far back to look when a block has no visit inside it. A 30-minute read leaves one visit at the start, so this window matters; 60 minutes matched 86% of page blocks on a real day, while 30 seconds matched 40% |
+| `browse.history.ahead_sec` | `30` | How far past the block end a visit still counts |
+| `browse.history.max_urls_per_block` | `3` | Upper bound on links per block; only visits that score close to the best one are kept |
+| `browse.history.copy_timeout_sec` | `5` | The history file is copied to `state/tmp` before it is opened (the browser keeps a lock on it); this bounds that copy |
+| `browse.address_bar.enabled` | `true` | When history has no hit, read a URL off the top strip of the screenshot. Only works on captures that stored line positions |
+| `browse.address_bar.top_ratio` | `0.15` | How much of the window height counts as the "top strip" |
+| `browse.domain_only.enabled` | `true` | Last resort: keep only `https://<host>/` and label the chip `(domain only)`, instead of dropping the link entirely |
+| `url.keep_query` | `true` | Local reports keep the query string, with sensitive values masked |
+| `url.strip_tracking` | `false` | Drop tracking parameters (`utm_*`, `fbclid`, `gclid`, `spm`, …) even in local reports |
+| `url.redact_secret_params` | `true` | Mask `token`, `session`, `code`, `auth`, `ticket` and similar values; cannot be turned off in shared copies |
+| `share.keep_query` | `false` | Whether the shared copy keeps the query string at all. Off by default: query strings often carry session ids and search terms |
+| `share.include_sources` | `false` | Whether the shared copy lists the source URL of each block |
+
+The domain-only fallback needs a title and OCR text to work. WeChat sits in `privacy.skip_ocr_apps` by default, so it produces neither; Feishu documents do not and work as shipped.
+
+History is read with `sqlite3` against a **copy** of the browser's `History` file, opened read-only; nothing is written back and no history entry outside the reported day is kept. The matched URLs land in `data/<day>/urls.jsonl`, follow the same retention as that day, and are removed by `forget`. The image itself never leaves the machine — only the URL of a page you already had open is stored.
+
 ## Retention and cleanup `retention`
 
 | Key | Default | Description |

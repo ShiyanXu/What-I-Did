@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import paths
+from i18n import t
 from refs.extract import RefCandidate
 
 SKIP_DIRS = {
@@ -27,6 +28,8 @@ class ResolvedRef:
     confidence: float = 0.5
     block_ids: list[str] = field(default_factory=list)
     why: str = ""
+    # 1.3.0：来源通道。旧报告没有这个字段，读取处一律用 .get()
+    source: str = ""
 
 
 class FileIndex:
@@ -120,6 +123,13 @@ class UrlProvider(BaseProvider):
     name = "url"
     scheme = "https"
 
+    # 命中通道 -> (为什么有这个链接, 置信度)。confidence 与 browse 产出的保持一致。
+    _CHANNEL = {
+        "history": ("Browser history match", 0.95),
+        "address_bar": ("Read from the address bar", 0.6),
+        "domain": ("Only the site domain was recognised", 0.5),
+    }
+
     def probe(self, cand: RefCandidate) -> bool:
         return cand.kind_hint == "url"
 
@@ -131,8 +141,11 @@ class UrlProvider(BaseProvider):
         p = urlparse(cand.raw)
         if p.scheme not in ("http", "https") or not p.netloc:
             return None
-        label = (p.netloc + p.path)[:80] or cand.raw
-        return ResolvedRef("", "url", cand.raw, label, 0.9, list(cand.block_ids), "OCR 中出现的链接")
+        label = (cand.label or "").strip() or (p.netloc + p.path)[:80] or cand.raw
+        src, (why, conf) = cand.source, self._CHANNEL.get(
+            cand.source, ("Link found in on-screen text", 0.9))
+        return ResolvedRef("", "url", cand.raw, label[:120], conf, list(cand.block_ids),
+                           t(why) if src else why, source=src)
 
 
 class LocalFileProvider(BaseProvider):

@@ -6,12 +6,16 @@
     python scripts\\dev_fixture.py --day 2026-10-18 --mock
     python scripts\\check_boundaries.py
 
+没有设置 `WID_HOME` 时本脚本直接返回 2：它会写入 `manual.json`、周汇总，
+并在开始处清掉样本日的 `manual.json`——在真实数据目录里跑会毁掉当天的人工补录。
+
 覆盖：空关键词、日期与天数越界、损坏日报、空周汇总、重复补录、非法时间、
 人工改标、分享版不含内部锚点。返回码 0 表示全部通过。
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -45,6 +49,15 @@ def check(cond, label: str) -> None:
 
 
 def main() -> int:
+    if not os.environ.get("WID_HOME", "").strip():
+        print(
+            "拒绝执行：未设置 WID_HOME。\n"
+            "为什么：本脚本会写入 manual.json、周汇总，并先删除样本日的 manual.json；"
+            "在真实数据目录里跑会覆盖人工补录。\n"
+            f"怎么修：先 set WID_HOME=%CD%\\.tmp_wid_test，再跑 "
+            "python scripts\\dev_fixture.py --day 2026-10-18 --mock，最后重跑本脚本。"
+        )
+        return 2
     cfg = cfgmod.load()
     if not paths.report_json(DAY).exists():
         print(f"缺少 {DAY} 的样本日报。先运行：python scripts/dev_fixture.py --day {DAY} --mock")

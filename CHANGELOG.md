@@ -21,6 +21,102 @@ Chinese (`### English` / `### 中文`).
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，分节用 `Added / Changed / Fixed / Removed`。
 每个版本段落英文在前、中文在后（`### English` / `### 中文`）。
 
+## [v1.3.0] - 2026-11-05
+
+### English
+
+Every page you visited in the report now carries the link you actually visited — still
+entirely on your machine, and off until you turn it on.
+
+#### Added
+
+- **Source links.** At report time the tool reads the local Chrome/Edge history file,
+  matches each page block to the visits that fall inside or just before it, and puts the
+  matched URL under that block. Reading a page for 30 minutes leaves one visit at the start,
+  so the match looks back up to an hour; blocks with nothing inside that window take the
+  single most recent visit before them, not all of them. Measured on a real day: 55 of 64
+  page blocks (86%) got a link, about 1.2 links per block.
+- **Two fallbacks when history has nothing.** If the top of the screenshot shows a URL
+  (chrome and the page area were captured with line positions), that address-bar text is
+  used; failing that, the block keeps only the site domain and is labelled
+  `(domain only)`, so you can still tell where you were without inventing a page.
+- **A "Source links" card in Settings** with three switches: read browser history, fall
+  back to the address bar, keep the query string in shared copies. The first one is **off
+  by default** — reading history is a decision you make, not one the tool makes for you.
+- `doctor` grew a `Source links` line that reports whether the build can read history,
+  whether it is enabled, and how many browser profiles were found.
+
+#### Changed
+
+- **Chat apps stop hiding article pages.** A WeChat or Feishu window whose title looks
+  like an article (`微信公众平台`, `mp.weixin.qq.com`, `飞书文档`, `Lark Docs`) is treated
+  as a web page instead of a chat, so those blocks get links too. Chat windows, group
+  names and conversation lists are still classified as chats. Note that WeChat is in
+  `privacy.skip_ocr_apps` by default, so it has no title and no OCR to match; this takes
+  effect there only after you take it out of that list. Feishu documents work as shipped.
+- **Shared copies drop the query string by default.** `?token=…`, `?q=your search terms`
+  and tracking parameters no longer travel into the copy you send to someone else. Local
+  reports keep the full URL with only the sensitive values masked.
+- **The minimum Python version is 3.10** (was 3.9), matching what the code already needed.
+
+#### Fixed
+
+- **A group chat you only read is no longer written up as your own work.** When the only
+  evidence is a conversation list or someone else's message, the block used to be summarised
+  as "scanned the group" and could even produce a follow-up such as "waiting for X to
+  confirm the schedule" — something you never did. Those blocks now say plainly that you
+  did not post anything, and no follow-up or next-day item may be derived from another
+  person's message. When the model is unavailable and the label has to be guessed locally,
+  a chat window falls back to "reading" instead of "communicating".
+
+#### Notes
+
+- Nothing is uploaded and no screenshot leaves the machine. Only the URL of a page you
+  already had open is stored, in `data/<day>/urls.jsonl`, on the same retention schedule as
+  the rest of that day and removed by `forget` together with it.
+- Days captured before this version have no line positions, so the address-bar fallback
+  only starts working on new captures.
+
+### 中文
+
+日报里每个看过的页面现在都带上你真正访问过的链接——仍然全在本机，而且默认不开。
+
+#### 新增
+
+- **来源链接**：出报时读取本机 Chrome/Edge 历史库，把每个网页块与该时段内（或稍早）的访问
+  对起来，把命中网址挂到块下面。读一篇 30 分钟的文章只会在开头留下一次访问记录，所以匹配
+  向前回溯最多一小时；窗内对不上的块，只取它之前**最近一次**访问，而不是把一小时前的
+  无关页面全挂上去。真实一天实测：64 个网页块命中 55 个（86%），平均每块 1.2 条链接。
+- **历史里没有时有两级兜底**：截图顶部若显示了网址（窗口和页面区域按行坐标采集），
+  就用地址栏那行文字；再不行只保留站点域名并标注 `（仅域名）`，让你知道当时在哪，
+  但不编造具体页面。
+- **设置页新增「来源链接」卡片**，三个开关：读取浏览历史、退回地址栏识别、分享版保留网址参数。
+  第一项**默认关闭**——要不要读历史由你决定，不由工具替你决定。
+- `doctor` 新增 `Source links` 一项，报告这个构建能不能读历史、是否开启、找到几个浏览器配置。
+
+#### 变更
+
+- **聊天软件不再吞掉文章页**：微信、飞书窗口的标题若是文章特征（`微信公众平台`、
+  `mp.weixin.qq.com`、`飞书文档`、`Lark Docs`），按网页处理，这些块同样能拿到链接；
+  聊天窗、群名、会话列表仍然算聊天。注意微信默认在 `privacy.skip_ocr_apps` 里，
+  没有标题也没有 OCR，所以这条对微信要先把它从该名单里去掉才生效；飞书开箱即用。
+- **分享版默认去掉网址参数**：`?token=…`、`?q=你的搜索词` 以及各种跟踪参数不再随分享副本
+  外流。本地日报保留完整网址，只对敏感参数打码。
+- **最低 Python 版本改为 3.10**（原 3.9），与代码实际需求对齐。
+
+#### 修复
+
+- **只读过、没有发言的群，不再被写成你的工作。** 证据只有会话列表或别人的消息的段落，
+  以前会被总结成「扫群消息」，甚至推出「等某人确认排期」这种你并没有做过的待跟进；
+  现在这类段落明确写「未发言」，并且不允许从别人的消息里推出待跟进或明日待办。
+  模型不可用、只能本地兜底时，聊天窗口按「阅读」处理，不再算成「沟通」。
+
+#### 说明
+
+- 不上传任何内容，截图不出本机。存下来的只有你本来就已经打开的页面网址，写在
+  `data/<日>/urls.jsonl`，与当天数据同一套保留周期，`forget` 一并删除。
+- 本版之前采集的日期没有行坐标，地址栏兜底要等新采集才会生效。
+
 ## [v1.2.2] - 2026-11-05
 
 ### English

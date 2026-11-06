@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import blocks as blocks_mod  # noqa: E402
+import browse as browse_mod  # noqa: E402
 import capture  # noqa: E402
 import config as cfgmod  # noqa: E402
 import digest  # noqa: E402
@@ -377,6 +378,152 @@ def test_excerpt_policy() -> None:
     check(retention.report_excerpt_days(three) == 3, "report_excerpt_days 读值正确")
 
 
+def test_source_links(cfg) -> None:
+    """1.3.0：来源链接不能把敏感参数带进报告，也不能把历史库搬进数据目录。"""
+    masked = privacy.normalize_url("https://ex.com/p?token=abc&q=hi#frag", cfg)
+    check("token=[REDACTED]" in masked, "source link: secret param is masked", masked)
+    check("frag" not in masked, "source link: fragment is dropped", masked)
+    check("q=hi" in masked, "source link: benign param is kept", masked)
+
+    for name in ("session", "password", "code", "signature", "access_token"):
+        got = privacy.normalize_url(f"https://ex.com/p?{name}=VALUE", cfg)
+        check("VALUE" not in got, f"source link: {name} value removed", got)
+
+    long_token = "Aa1" * 40
+    got = privacy.normalize_url(f"https://ex.com/p?k={long_token}", cfg)
+    check(long_token not in got, "source link: long random value is masked", got)
+
+    check(privacy.normalize_url("javascript:alert(1)", cfg) == "",
+          "source link: non-http scheme is rejected")
+    check("?" not in privacy.normalize_url("https://ex.com/p?a=1", cfg, keep_query=False),
+          "source link: share version drops the query")
+
+    one = privacy.canonical_url("https://ex.com/p?a=1&token=AAA", cfg)
+    two = privacy.canonical_url("https://ex.com/p?token=BBB&a=1", cfg)
+    check(one and one == two, "source link: canonical ignores secret values and order", f"{one} vs {two}")
+
+    # 历史库只允许出现在 state/tmp 与浏览器原目录下，绝不能落进 data/
+    check(str(paths.browse_tmp()).startswith(str(paths.STATE)),
+          "source link: history copies live under state/", str(paths.browse_tmp()))
+    src = (ROOT / "src" / "browse.py").read_text(encoding="utf-8")
+    check("DATA" not in src or "paths.DATA" not in src,
+          "source link: browse.py never writes into the data folder")
+
+    check(privacy.domain_source("mp.weixin.qq.com") == "https://mp.weixin.qq.com/",
+          "source link: domain-only source is built from the host")
+    check(privacy.domain_source("") == "", "source link: empty host yields no link")
+
+    check(blocks_mod.classify("WeChat.exe", "某文章 - 微信公众平台") == "web",
+          "source link: WeChat article page is classified as web")
+    check(blocks_mod.classify("WeChat.exe", "与张三的聊天") == "comm",
+          "source link: WeChat chat window stays comm")
+    # 飞书同时在 MEET_APPS 里，改判若写在 MEET 分支之后会永远不生效
+    check(blocks_mod.classify("Feishu.exe", "项目方案 - 飞书文档") == "web",
+          "source link: Feishu doc page is classified as web")
+    check(blocks_mod.classify("Feishu.exe", "项目资源协调 - 飞书") == "meet",
+          "source link: Feishu meeting window stays meet")
+
+    # 地址栏通道只认带行坐标的记录；没有 lines 的旧数据必须跳过而不是猜
+    import types
+
+    fake = types.SimpleNamespace(ocr_ids=["o1"], text="", title="x", app="chrome.exe")
+    got = browse_mod.address_bar_url(
+        fake, {"o1": {"lines": [{"y0": 20, "y1": 40, "text": "https://ex.com/a?token=abc"}],
+                      "height": 800}}, cfg)
+    check(got.startswith("https://ex.com/a") and "abc" not in got,
+          "source link: address bar line is read and masked", got)
+    check(browse_mod.address_bar_url(fake, {"o1": {"text": "no coords"}}, cfg) == "",
+          "source link: records without line coordinates are skipped")
+    low = types.SimpleNamespace(ocr_ids=["o1"], text="", title="x", app="chrome.exe")
+    check(browse_mod.address_bar_url(
+        low, {"o1": {"lines": [{"y0": 700, "y1": 760, "text": "https://ex.com/a"}],
+                     "height": 800}}, cfg) == "",
+          "source link: a URL outside the top strip is not an address bar")
+
+    hint = types.SimpleNamespace(text="网页由 mp.weixin.qq.com 提供", title="x")
+    check(browse_mod.domain_hint(hint, cfg) == "https://mp.weixin.qq.com/",
+          "source link: domain hint comes from the OCR text", browse_mod.domain_hint(hint, cfg))
+    check(browse_mod.domain_hint(types.SimpleNamespace(text="", title="x"), cfg) == "",
+          "source link: no OCR text means no domain hint")
+
+
+def test_config_nested_write() -> None:
+    """设置页的三个开关是三层键（browse.history.enabled），写盘必须支持多层。
+
+    回归背景：`save_values` 曾只接受 `section.key` 两段，三层直接抛 ValueError，
+    界面上点保存就会失败——而这条路径没有别的测试覆盖。
+    """
+    import yaml
+
+    src = ["browse:", "  address_bar:            # 说明", "    enabled: true",
+           "url:", "  keep_query: true"]
+    out = cfgmod._set_path(list(src), ["browse", "history", "enabled"], True)
+    data = yaml.safe_load("\n".join(out))
+    check((data.get("browse", {}).get("history", {}) or {}).get("enabled") is True,
+          "config write: three-level key is written", "\n".join(out))
+    check(any("说明" in line for line in out), "config write: sibling comment survives")
+    check(data.get("browse", {}).get("address_bar", {}).get("enabled") is True,
+          "config write: sibling value untouched")
+
+    out2 = cfgmod._set_path(list(src), ["url", "keep_query"], False)
+    check(yaml.safe_load("\n".join(out2))["url"]["keep_query"] is False,
+          "config write: two-level key still works")
+
+    out3 = cfgmod._set_path(list(src), ["brand", "new", "deep"], 5)
+    check(yaml.safe_load("\n".join(out3))["brand"]["new"]["deep"] == 5,
+          "config write: a missing section is appended as a whole tree")
+
+    try:
+        cfgmod._set_path(list(src), ["lonely"], 1)
+    except ValueError:
+        check(True, "config write: a one-part path is rejected")
+    else:
+        check(False, "config write: a one-part path is rejected", "no error raised")
+
+
+def test_chat_evidence() -> None:
+    """聊天窗口不能自己变成"我沟通过了"。
+
+    回归背景：11-05 的日报把"只看了群会话列表"写成"扫群消息"、并据此推出
+    "等别人确认排期"的待跟进。提示词里原本就有"别人的消息一律不算"，但没管到
+    behaviors 的 label/detail 和 followups/tomorrow，兜底路径还把 comm 直接映射成
+    communicating。两边一起补：这里锁住本地兜底，下面锁住提示词里的硬要求。
+    """
+    import behavior as behavior_mod
+
+    sess = behavior_mod.Session(
+        id="s1",
+        start=timeutil.parse("2026-11-05T12:29:46+08:00"),
+        end=timeutil.parse("2026-11-05T12:35:18+08:00"),
+    )
+    sess.category = "comm"
+    sess.titles = ["迪普AP5000-2C 中磊交流群"]
+    check(behavior_mod.guess_verb(sess) == "reading",
+          "chat evidence: a chat window falls back to reading, not communicating",
+          behavior_mod.guess_verb(sess))
+    check(behavior_mod.local_fill(sess)["verb"] == "reading",
+          "chat evidence: the local filler does not claim a conversation")
+
+    # 标题里只有"群/消息"时也不能猜成沟通
+    sess2 = behavior_mod.Session(
+        id="s2",
+        start=timeutil.parse("2026-11-05T18:33:49+08:00"),
+        end=timeutil.parse("2026-11-05T19:14:26+08:00"),
+    )
+    sess2.category = "other"
+    sess2.titles = ["迪普四款产品ODM 2.0项目需求817"]
+    check(behavior_mod.guess_verb(sess2) != "communicating",
+          "chat evidence: a title mentioning a group is never communicating")
+
+    prompt = digest.build_system_prompt()
+    check("看群消息，未发言" in prompt,
+          "chat evidence: the prompt prescribes the read-only wording")
+    check("追不到就删掉" in prompt,
+          "chat evidence: followups may not come from other people's messages")
+    check("未发言" in digest._USER_SCHEMA,
+          "chat evidence: the schema asks the model to say it did not speak")
+
+
 def main() -> int:
     cfg = make_cfg()
     tmp = Path(tempfile.mkdtemp(prefix="wid-privacy-"))
@@ -393,6 +540,9 @@ def main() -> int:
         test_excerpt_policy()
         test_grab_no_fallback(cfg)
         test_build_guard(tmp)
+        test_source_links(cfg)
+        test_config_nested_write()
+        test_chat_evidence()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -88,6 +88,23 @@ DEFAULTS: dict[str, Any] = {
         "refresh_gap_min": 90,
     },
     "obsidian": {"enabled": False, "vault_dir": ""},
+    "browse": {
+        # 默认关：这是本项目第一次主动读"与工作无关的本机隐私数据"，
+        # 由用户在设置页手动开启（1.3.0 决策 D-4）。
+        "history": {
+            "enabled": False,
+            "browsers": ["chrome", "edge"],
+            "profiles": "auto",
+            "lookback_sec": 3600,
+            "ahead_sec": 30,
+            "max_urls_per_block": 3,
+            "copy_timeout_sec": 5,
+        },
+        "address_bar": {"enabled": True, "top_ratio": 0.15},
+        "domain_only": {"enabled": True},
+    },
+    "url": {"keep_query": True, "strip_tracking": False, "redact_secret_params": True},
+    "share": {"keep_query": False, "include_sources": False},
     "refs": {
         "enabled": True,
         "providers": ["local_file", "obsidian", "url"],
@@ -257,9 +274,21 @@ def _parse_config(text: str) -> dict:
     for key in ("refs.providers", "refs.search_roots"):
         if any(not isinstance(value, str) for value in cfg.get(key)):
             raise ConfigError(t("{key} must be a list of strings", key=key))
-    for key in ("ocr.crop_active_window", "capture.pause_on_locked", "report.review_mode"):
+    for key in ("ocr.crop_active_window", "capture.pause_on_locked", "report.review_mode",
+                "browse.history.enabled", "browse.address_bar.enabled", "browse.domain_only.enabled",
+                "url.keep_query", "url.strip_tracking", "url.redact_secret_params",
+                "share.keep_query", "share.include_sources"):
         if not isinstance(cfg.get(key), bool):
             raise ConfigError(t("{key} must be true or false", key=key))
+    for key in ("browse.history.lookback_sec", "browse.history.ahead_sec",
+                "browse.history.max_urls_per_block"):
+        number(key, 0, 86400, integer=True)
+    number("browse.history.max_urls_per_block", 1, 20, integer=True)
+    number("browse.history.copy_timeout_sec", 0.5, 60)
+    number("browse.address_bar.top_ratio", 0.01, 1)
+    known = {"chrome", "edge", "firefox"}
+    if any(str(b).lower() not in known for b in (cfg.get("browse.history.browsers") or [])):
+        raise ConfigError(t("browse.history.browsers may only contain chrome, edge or firefox"))
     return merged
 
 
@@ -374,85 +403,142 @@ def _find_comment(rest: str) -> int:
     return -1
 
 
-def _set_scalar(lines: list[str], section: str, key: str, value: Any) -> list[str]:
-    """在 section 段内就地替换 key 的值。
+def _block_end(lines: list[str], start: int, stop: int) -> int:
+    """从块头 `start` 往下找块尾：第一条缩进回到 0 的非空非注释行。"""
+    for i in range(start + 1, stop):
+        line = lines[i]
+        if line.strip() and not line.startswith((" ", "\t", "#")):
+            return i
+    return stop
 
-    - 行内注释原地保留，且对齐到原来的列；
-    - 列表写成块状（`- "x"`），并清掉旧的块状列表子行；
-    - 找不到就插到段尾。全程不动其它行。
+
+def _child_end(lines: list[str], start: int, stop: int) -> int:
+    """`start` 那一行作为块头时，它自己的子块到哪里结束（缩进不深于它的第一行）。"""
+    base = len(lines[start]) - len(lines[start].lstrip())
+    for i in range(start + 1, stop):
+        line = lines[i]
+        if not line.strip():
+            continue
+        if (len(line) - len(line.lstrip())) <= base:
+            return i
+    return stop
+
+
+def _find_child(lines: list[str], lo: int, hi: int, key: str) -> tuple[int, int] | None:
+    """在 [lo, hi) 里找 `key:` 形式的子块，返回它的 (子块起, 子块止)。"""
+    pat = re.compile(rf"^([ \t]+){re.escape(key)}:[ \t]*(?:#.*)?$")
+    for i in range(lo, hi):
+        if pat.match(lines[i]):
+            return i + 1, _child_end(lines, i, hi)
+    return None
+
+
+def _replace_value(lines: list[str], i: int, key: str, indent: str, value: Any,
+                   end: int) -> list[str]:
+    """把第 i 行改成 `indent + key: value`，行内注释原地保留并保持原来的列。"""
+    colon = len(indent) + len(key) + 1
+    rest = lines[i][colon:]
+    h = _find_comment(rest)
+    comment = rest[h:] if h >= 0 else ""
+    col = (colon + h) if h >= 0 else -1
+    old_val = (rest[:h] if h >= 0 else rest).strip()
+    prefer_quote = old_val.startswith(('"', "'"))
+
+    if isinstance(value, (list, tuple)):
+        # 清掉旧的块状列表子行（缩进更深且以 - 开头）
+        j = i + 1
+        while j < end:
+            nxt = lines[j]
+            if not nxt.strip():
+                break
+            deeper = (len(nxt) - len(nxt.lstrip())) > len(indent)
+            if not deeper or not nxt.lstrip().startswith("-"):
+                break
+            j += 1
+        if j > i + 1:
+            del lines[i + 1:j]
+        if not value:
+            body = f"{indent}{key}: []"
+            if comment:
+                body += (" " * max(1, col - len(body)) if col > len(body) else " ") + comment
+            lines[i] = body
+        else:
+            head = f"{indent}{key}:"
+            if comment:
+                head += (" " * max(1, col - len(head)) if col > len(head) else " ") + comment
+            block = [head] + [f"{indent}  - {_fmt_scalar(x, True)}" for x in value]
+            lines[i:i + 1] = block
+        return lines
+
+    body = f"{indent}{key}: {_fmt_scalar(value, prefer_quote)}"
+    if comment:
+        if col > len(body):
+            body += " " * (col - len(body))
+        else:
+            body += " "
+        body += comment
+    lines[i] = body
+    return lines
+
+
+def _set_path(lines: list[str], parts: list[str], value: Any) -> list[str]:
+    """按 `a.b.c` 路径就地改值，缺哪一层就补哪一层。
+
+    只动目标行：注释、对齐、其它段落一律原样保留。列表写成块状并清掉旧子行。
     """
+    if len(parts) < 2:
+        raise ValueError(t("Configuration paths are at least section.key: {dotted}",
+                           dotted=".".join(parts)))
+    section = parts[0]
     head_re = re.compile(rf"^{re.escape(section)}:\s*(#.*)?$")
     start = next((i for i, line in enumerate(lines) if head_re.match(line)), None)
     if start is None:
-        block = [f"{section}:", f"  {key}: {_fmt_scalar(value)}"]
+        block = [f"{section}:"]
+        ind = "  "
+        for k in parts[1:-1]:
+            block.append(f"{ind}{k}:")
+            ind += "  "
+        block.append(f"{ind}{parts[-1]}: {_fmt_scalar(value)}")
         return lines + [""] + block
 
-    end = len(lines)
-    for i in range(start + 1, len(lines)):
-        line = lines[i]
-        if line.strip() and not line.startswith((" ", "\t", "#")):
-            end = i
-            break
-
-    row = re.compile(rf"^([ \t]+){re.escape(key)}:[ \t]*(.*)$")
-    for i in range(start + 1, end):
-        m = row.match(lines[i])
-        if not m:
-            continue
-        indent = m.group(1)
-        colon = len(indent) + len(key) + 1
-        rest = lines[i][colon:]
-        h = _find_comment(rest)
-        comment = rest[h:] if h >= 0 else ""
-        col = (colon + h) if h >= 0 else -1
-        old_val = (rest[:h] if h >= 0 else rest).strip()
-        prefer_quote = old_val.startswith(('"', "'"))
-
-        if isinstance(value, (list, tuple)):
-            # 清掉旧的块状列表子行（缩进更深且以 - 开头）
-            j = i + 1
-            while j < end:
-                nxt = lines[j]
-                if not nxt.strip():
-                    break
-                deeper = (len(nxt) - len(nxt.lstrip())) > len(indent)
-                if not deeper or not nxt.lstrip().startswith("-"):
-                    break
-                j += 1
-            if j > i + 1:
-                del lines[i + 1:j]
-            if not value:
-                body = f"{indent}{key}: []"
-                if comment:
-                    body += (" " * max(1, col - len(body)) if col > len(body) else " ") + comment
-                lines[i] = body
-            else:
-                head = f"{indent}{key}:"
-                if comment:
-                    head += (" " * max(1, col - len(head)) if col > len(head) else " ") + comment
-                block = [head] + [f"{indent}  - {_fmt_scalar(x, True)}" for x in value]
-                lines[i:i + 1] = block
+    lo, hi = start + 1, _block_end(lines, start, len(lines))
+    for depth, key in enumerate(parts[1:-1], 1):
+        found = _find_child(lines, lo, hi, key)
+        if found is None:
+            # 中间层缺失：在父块尾部补出剩下的整棵子树
+            ind = "  " * depth
+            block: list[str] = []
+            for k in parts[depth:-1]:
+                block.append(f"{ind}{k}:")
+                ind += "  "
+            block.append(f"{ind}{parts[-1]}: {_fmt_scalar(value)}")
+            pos = hi
+            while pos > lo and not lines[pos - 1].strip():
+                pos -= 1
+            lines[pos:pos] = block
             return lines
+        lo, hi = found
 
-        body = f"{indent}{key}: {_fmt_scalar(value, prefer_quote)}"
-        if comment:
-            if col > len(body):
-                body += " " * (col - len(body))
-            else:
-                body += " "
-            body += comment
-        lines[i] = body
-        return lines
+    row = re.compile(rf"^([ \t]+){re.escape(parts[-1])}:[ \t]*(.*)$")
+    for i in range(lo, hi):
+        m = row.match(lines[i])
+        if m:
+            return _replace_value(lines, i, parts[-1], m.group(1), value, hi)
 
-    pos = end
-    while pos > start + 1 and not lines[pos - 1].strip():
+    pos = hi
+    while pos > lo and not lines[pos - 1].strip():
         pos -= 1
     if isinstance(value, (list, tuple)) and value:
-        block = [f"  {key}:"] + [f"    - {_fmt_scalar(x, True)}" for x in value]
+        block = [f"  {parts[-1]}:"] + [f"    - {_fmt_scalar(x, True)}" for x in value]
         lines[pos:pos] = block
     else:
-        lines.insert(pos, f"  {key}: {_fmt_scalar(value)}")
+        lines.insert(pos, f"  {parts[-1]}: {_fmt_scalar(value)}")
     return lines
+
+
+def _set_scalar(lines: list[str], section: str, key: str, value: Any) -> list[str]:
+    """两层的便捷写法，等价于 `_set_path([section, key])`。"""
+    return _set_path(lines, [section, key], value)
 
 
 def save_values(updates: dict[str, Any]) -> list[str]:
@@ -475,9 +561,9 @@ def save_values(updates: dict[str, Any]) -> list[str]:
     written: list[str] = []
     for dotted, value in updates.items():
         parts = dotted.split(".")
-        if len(parts) != 2:
+        if len(parts) < 2:
             raise ValueError(t("Only the section.key form is supported: {dotted}", dotted=dotted))
-        lines = _set_scalar(lines, parts[0], parts[1], value)
+        lines = _set_path(lines, parts, value)
         written.append(dotted)
 
     new_text = "\n".join(lines).rstrip() + "\n"

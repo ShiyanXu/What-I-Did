@@ -48,6 +48,7 @@ Both tasks are registered as "run only when the user is logged on". Switching to
 | Dedupe | Screenshot fingerprint | Keep / discard | `vision.py` |
 | Recognize | Active window screenshot at native resolution | Redacted text | `ocr.py` |
 | Block | Event stream | Activity block `b-YYYYMMDD-HHMM-xxxx` | `blocks.py` |
+| Enrich | Activity blocks + local browser history | Each page block gets `urls[]` | `browse.py` |
 | Segment | Activity blocks | Behavior segment `seg-NN` | `behavior.py` |
 | Reference | Titles and OCR text | `ref_id` and clickable links | `refs/` |
 | Compress | Blocks, segments, stats, references, manual entries | Payload constrained by a character budget | `digest.py` |
@@ -55,13 +56,15 @@ Both tasks are registered as "run only when the user is logged on". Switching to
 | Validate | Model JSON | Structured report, or a list of issues | `validate.py` |
 | Persist | Report data | `reports/<date>.json/.md`, `web/` | `render.py`, `report.py` |
 
-Three of these are worth expanding.
+Four of these are worth expanding.
 
 **Sampling and dedupe.** Every sample reads the foreground window's handle, title, process name and rectangle, plus idle seconds and lock-screen state. By default only the active window is captured, and dHash Hamming distance together with the mean difference over a 12×8 grid decides whether anything "changed". Changed frames go to disk; when the picture stays static for a long time, keyframes are kept every `keyframe_sec` so the timeline never has a hole. If the window rectangle is unavailable or cropping fails, **the frame is skipped; it does not fall back to the full screen** — better to record less than to record it wrong.
 
 **Blocks and segments.** Adjacent events further apart than `gap_threshold_min` break the block; a single block is capped at `max_block_min` (30 minutes by default). Intervals inside a block covered by pause, lock screen or the blocklists are subtracted from `active_seconds` and recorded separately as `idle_minutes`. Behavior segments are split further whenever the primary category changes, capped at `max_session_min`, and carry `start_iso` / `end_iso` so a segment crossing midnight does not end up misplaced.
 
 A block's ID is `b-YYYYMMDD-HHMM-<hash4(app+title)>`, decided only by the day, the block's starting minute and the app/title. **Re-runs, backfills and re-blocking never change it**, so it works as an HTML anchor and can be back-referenced from external documents.
+
+**Source links.** `browse.py` runs after blocking and before any compression. It copies the browser's `History` file into `state/tmp`, opens it read-only, and pulls the visits of that day; the copy is deleted afterwards. Matching has two tiers, because a single `visits` row only records a navigation: reading one article for half an hour leaves a single row at the start. Visits inside the block (plus `ahead_sec`) may contribute several links, keeping only those that score close to the best one; if the block has none, only the most recent visit *before* it is used within `lookback_sec`. Scoring is `0.6 × title similarity + 0.4 × closeness`, so a title that matches trumps a visit that merely happens to be near. When history yields nothing, the address-bar strip is tried (only for captures that stored line positions), then the host alone, tagged `source: domain`. Everything is written to `data/<day>/urls.jsonl` with one `os.replace`, so a failed run never leaves a half-written file.
 
 **Compression and validation.** `digest.py` squeezes a day into `llm.input_char_budget` (24,000 characters by default): stats, block list, behavior segments and references each get an allowance, trimmed step by step, and finally hard-truncated with a note of what was cut. After the model answers, `validate.py` checks that every `block_id` / `ref_id` / `seg_id` actually exists; missing or invented references go into `issues`. If the JSON structure is broken, the error is fed back and retried once; if that fails too, it degrades.
 
@@ -104,6 +107,7 @@ Capture watchdog                   ─┘
 | | `vision.py` | dHash, grid fingerprint, classification, downscaling, atomic writes |
 | | `ocr.py` | Engine selection and fallback, queue, quota, watchdog, recovery probing |
 | Processing | `blocks.py` | Events → activity blocks, stable IDs, statistics |
+| | `browse.py` | Reads local Chrome/Edge history at report time and matches visits to page blocks (history → address bar → domain only) |
 | | `behavior.py` | Activity blocks → behavior segments; the verb vocabulary is the only source |
 | | `digest.py` | Compression into the budget; prompts |
 | | `refs/` | Reference extraction, resolution, dedupe, caching |
@@ -181,6 +185,7 @@ These are kept completely separate from automatic output: re-runs and cleanup ne
   data\<date>\
     events.jsonl           event stream
     ocr.jsonl              redacted recognition results
+    urls.jsonl             source links matched for this day (only when browser history is on)
     manual.json            manual entries and relabeling
     shots\ thumbs\         changed frames and thumbnails
   reports\<date>.md/.json  daily reports

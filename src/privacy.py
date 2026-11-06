@@ -213,3 +213,115 @@ def redact_value(value, cfg, extra_secrets: tuple[str, ...] = ()):
 
 def redact_count(cfg) -> int:
     return len(_ALWAYS) + len(cfg.get("privacy.redact_patterns", []) or [])
+
+
+# ---------------------------------------------------------------- URL 归一化
+# 1.3.0：来源链接。策略是「保留 query 但给敏感参数打码」，因为用户要的是"点得回去"，
+# 而 token / session 这类参数一旦进报告就可能被分享出去。
+_SECRET_PARAMS = {
+    "token", "access_token", "refresh_token", "id_token", "authtoken",
+    "sig", "signature", "password", "passwd", "pwd",
+    "key", "apikey", "api_key", "secret", "client_secret",
+    "session", "sessionid", "jsessionid", "sid",
+    "code", "auth", "ticket", "sso_token", "cookie",
+}
+_TRACKING_EXACT = {
+    "fbclid", "gclid", "dclid", "msclkid", "spm", "scm",
+    "from", "ref", "ref_src", "share_token", "vd_source", "share_from",
+}
+_TRACKING_PREFIX = ("utm_",)
+_REDACTED = "[REDACTED]"
+
+# 形如随机串的参数值（长、含大小写与数字、无空格）疑似 token
+_LOOKS_RANDOM = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z0-9_\-+/=]{32,}$")
+
+
+def host_of(uri: str) -> str:
+    try:
+        return (urlsplit(uri or "").hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _split_query(uri: str) -> tuple[str, str, str]:
+    """返回 (base, host, query)，base 为 scheme://host/path，不含 fragment。"""
+    parts = urlsplit(uri or "")
+    if parts.scheme.lower() not in ("http", "https") or not parts.netloc:
+        return "", "", ""
+    base = f"{parts.scheme.lower()}://{parts.netloc}{parts.path or '/'}"
+    return base, (parts.hostname or "").lower(), parts.query
+
+
+def _is_tracking(name: str) -> bool:
+    low = name.lower()
+    return low in _TRACKING_EXACT or any(low.startswith(p) for p in _TRACKING_PREFIX)
+
+
+def normalize_url(uri: str, cfg=None, *, keep_query: bool | None = None,
+                  strip_tracking: bool | None = None) -> str:
+    """规范化为可落盘的 URI：去 fragment、敏感参数打码、可选去追踪参数。
+
+    - 非 http(s) 一律返回空串（javascript: / file:// 不走这条路，由 provider 分别处理）
+    - keep_query=False 时整段 query 丢弃（分享版用）
+    - 打码只动参数值，参数名保留，方便读者判断"这里原本有个 token"
+    """
+    base, _host, query = _split_query(uri)
+    if not base:
+        return ""
+    if cfg is not None:
+        if keep_query is None:
+            keep_query = bool(cfg.get("url.keep_query", True))
+        if strip_tracking is None:
+            strip_tracking = bool(cfg.get("url.strip_tracking", False))
+    if keep_query is None:
+        keep_query = True
+    if strip_tracking is None:
+        strip_tracking = False
+    if not keep_query or not query:
+        return base
+
+    out: list[str] = []
+    for item in query.split("&"):
+        if not item:
+            continue
+        name, _, value = item.partition("=")
+        if not name:
+            continue
+        if strip_tracking and _is_tracking(name):
+            continue
+        if name.lower() in _SECRET_PARAMS and value:
+            value = _REDACTED
+        elif value and len(value) > 64 and _LOOKS_RANDOM.match(value):
+            value = _REDACTED
+        out.append(f"{name}={value}" if value else name)
+    return base + ("?" + "&".join(out) if out else "")
+
+
+def canonical_url(uri: str, cfg=None) -> str:
+    """去重键：host + path + 排序后的参数（敏感值不参与，避免同页不同 token 被当成两页）。"""
+    base, host, query = _split_query(uri)
+    if not base:
+        return ""
+    pairs: list[tuple[str, str]] = []
+    for item in query.split("&"):
+        if not item:
+            continue
+        name, _, value = item.partition("=")
+        if not name:
+            continue
+        if name.lower() in _SECRET_PARAMS or (value and len(value) > 64 and _LOOKS_RANDOM.match(value)):
+            value = ""
+        pairs.append((name.lower(), value))
+    if not pairs:
+        return base
+    pairs.sort()
+    tail = "&".join(f"{k}={v}" if v else k for k, v in pairs)
+    return f"{base}?{tail}"
+
+
+def domain_source(host: str) -> str:
+    """只有域名时用的来源链接（微信/飞书内置浏览器）。空 host 返回空串。"""
+    host = (host or "").strip().lower()
+    if not host or "/" in host or " " in host:
+        return ""
+    return f"https://{host}/"

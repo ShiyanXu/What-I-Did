@@ -136,3 +136,27 @@ refs:
     scheme: "kb"
     base_url: ""
     url_template: ""
+
+browse:
+  history:                  # 报告期反查本机浏览器历史，给网页块补上原始链接
+    enabled: false          # 默认关：这是主动读本机隐私数据，需你在设置页手动开
+    browsers: [chrome, edge]  # Firefox 预留但本期不实现
+    profiles: auto          # auto 扫所有 profile，或填目录列表
+    lookback_sec: 3600      # 向前回溯 60 分钟（访问记录只记导航，长阅读只留开头那一次）
+    ahead_sec: 30           # 块结束后 30 秒内发生的访问也算候选
+    max_urls_per_block: 3
+    copy_timeout_sec: 5
+  address_bar:
+    enabled: true           # 历史库拿不到时，尝试从窗口顶部 OCR 里认地址栏
+    top_ratio: 0.15         # 只认顶部 15% 的行
+  domain_only:
+    enabled: true           # 微信/飞书内置浏览器退到"仅域名"来源
+
+url:
+  keep_query: true          # 保留查询串（去掉就点不回原页面）
+  strip_tracking: false     # true 时去掉 utm_* / fbclid / spm 等追踪参数
+  redact_secret_params: true  # token / session / code 等参数值打码
+
+share:
+  keep_query: false         # 分享版默认去掉查询串
+  include_sources: false    # 1.3.1 起：分享版是否带知识卡

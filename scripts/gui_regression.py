@@ -231,7 +231,9 @@ def main() -> int:
             click(btn_rv, app, t("Review queued content"))
             pump(app, 0.8)
             text = page.text.get("1.0", "end")
-            check("点击后切到审核视图", "将要发给模型" in text, f"{len(text)} 字")
+            # 断言不能写死中文：界面语言可切，英文下这句是 "…will be sent to the model…"
+            check("点击后切到审核视图", "will be sent to the model" in text or "将要发给模型" in text,
+                  f"{len(text)} 字")
 
             send = find_button(page.badge_box, t("Approve & send"))
             check("审核视图有「审核并发送」", send is not None)

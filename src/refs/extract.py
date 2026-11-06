@@ -35,6 +35,10 @@ class RefCandidate:
     kind_hint: str
     block_ids: list[str] = field(default_factory=list)
     title_context: str = ""
+    # 1.3.0：来源通道（history / address_bar / domain / ocr）。空表示从文本里抽出来的。
+    source: str = ""
+    # 命中通道已经知道"该显示成什么"，就不让 provider 再猜一次
+    label: str = ""
 
 
 def _trim_url(u: str) -> str:
@@ -75,9 +79,27 @@ def extract(text: str, block_ids: list[str] | None = None) -> list[RefCandidate]
 
 
 def extract_from_blocks(blocks) -> list[RefCandidate]:
-    """每个块抽一次，带上 block_id，方便页面把引用挂回证据。"""
+    """每个块抽一次，带上 block_id，方便页面把引用挂回证据。
+
+    除了从文本里抽，还会把报告期反查到的 URL（`Block.urls`）直接注入成候选：
+    URL 已经是终态，不需要再走 provider 解析，只需要 provider 把它变成 ref 记录。
+    """
     all_c: dict[str, RefCandidate] = {}
     for b in blocks:
+        for u in (getattr(b, "urls", None) or []):
+            uri = str(u.get("uri") or "")
+            if not uri:
+                continue
+            key = uri.lower()
+            cand = all_c.get(key)
+            if cand is None:
+                cand = RefCandidate(
+                    uri, _KIND_URL, [b.id], b.title or "",
+                    source=str(u.get("source") or ""), label=str(u.get("title") or ""),
+                )
+                all_c[key] = cand
+            elif b.id not in cand.block_ids:
+                cand.block_ids.append(b.id)
         text = "\n".join([b.title or "", b.text or ""])
         for c in extract(text, [b.id]):
             key = c.raw.lower()

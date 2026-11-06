@@ -49,8 +49,8 @@ All of them live under `scripts/`, none of them touch the network or your real r
 | Script | Coverage | Usage |
 | --- | --- | --- |
 | `dev_fixture.py` | Builds a synthetic day of events + a fake model and exercises the whole chain | `python scripts\dev_fixture.py --day 2026-10-18 --mock`; `--clean` deletes it |
-| `check_privacy.py` | 73 privacy and invalid-config checks: forged credential injection, zero requests with outbound off, pause/lock screen/blocklists, re-blocking after narrowing the blocklist, OCR address validation, no capture when cropping fails, build protection | `python scripts\check_privacy.py` |
-| `check_boundaries.py` | 27 boundary and error-path checks: empty keyword, out-of-range date, corrupt JSON, empty week, duplicate manual entry, invalid time | Needs samples first; `python scripts\check_boundaries.py` |
+| `check_privacy.py` | Privacy and invalid-config checks: forged credential injection, zero requests with outbound off, pause/lock screen/blocklists, re-blocking after narrowing the blocklist, OCR address validation, no capture when cropping fails, build protection | `python scripts\check_privacy.py` |
+| `check_boundaries.py` | Boundary and error-path checks: empty keyword, out-of-range date, corrupt JSON, empty week, duplicate manual entry, invalid time | Set `WID_HOME=%CD%\.tmp_wid_test` and build samples first; returns 2 when unset |
 | `verify_dpi.py` | 14 DPI and multi-monitor checks: screenshot size = window rectangle, cross-monitor origin offset, full screen = virtual desktop, refuse to write when coordinate spaces disagree | `python scripts\verify_dpi.py` |
 | `gui_regression.py` | About 41 click-level UI checks (the count varies with branches): switching between the four pages, manual entry validation, forget confirmation, review send/discard | Build `dist/` first, then prepare the environment with `seed_gui_home.py` |
 | `seed_gui_home.py` | Prepares the GUI regression environment in one step (may only write to `.tmp_wid*`) | `python scripts\seed_gui_home.py .tmp_wid_gui` |

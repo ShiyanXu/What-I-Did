@@ -71,7 +71,7 @@ def _stats_table(stats: dict, cat_label: dict) -> list[str]:
 
 
 def build_md(day: str, data: dict, include_evidence: bool = True,
-             cat_label: dict | None = None) -> str:
+             cat_label: dict | None = None, cfg=None) -> str:
     """把日报 JSON 摊成分享版 Markdown。缺字段一律按空处理，不抛异常。"""
     labels = cat_label or {}
     rep = data.get("report") or {}
@@ -213,8 +213,18 @@ def build_md(day: str, data: dict, include_evidence: bool = True,
     if public_refs:
         lines.append(t("## Related links"))
         lines.append("")
+        keep_query = bool(cfg.get("share.keep_query", False)) if cfg is not None else False
+        seen_urls: set[str] = set()
         for r in public_refs:
-            lines.append(f"- [{_clean(r.get('label') or r.get('uri'))}]({r['uri']})")
+            # 分享版默认去掉查询串：查询串里常有会话 id、邮件地址、搜索词
+            uri = privacy.normalize_url(str(r["uri"]), cfg, keep_query=keep_query) or str(r["uri"])
+            if uri in seen_urls:
+                continue
+            seen_urls.add(uri)
+            label = _clean(r.get("label") or uri)
+            if str(r.get("source") or "") == "domain":
+                label = t("{label} (domain only)", label=label)
+            lines.append(f"- [{label}]({uri})")
         lines.append("")
 
     lines.append("---")
@@ -274,7 +284,7 @@ def export_day(day: str, cfg=None, out: str | Path | None = None,
     except Exception:
         cat_label = {}
 
-    md = build_md(day, data, include_evidence=include_evidence, cat_label=cat_label)
+    md = build_md(day, data, include_evidence=include_evidence, cat_label=cat_label, cfg=cfg)
     # 最后一道：整篇过隐私规则（路径已先清洗，避免把「本机路径」也当作可疑串）
     md = privacy.redact(md, privacy.current_config(cfg))
 

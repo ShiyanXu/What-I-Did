@@ -61,9 +61,29 @@ def normalize_title(title: str) -> str:
     return t[:120]
 
 
+# 内置浏览器（微信/飞书）里的"文章页"标题特征。
+# 事件里没有窗口类名（winapi 没有 GetClassName），所以只能按标题判，宁可漏判不要误判。
+# 只放真正指向“文章页”的后缀。像 "- 飞书" 这种是飞书聊天窗的通用标题，
+# 拿它当特征会把每个飞书窗口都判成网页，反而更糟。
+_ARTICLE_HINTS = ("微信公众平台", "mp.weixin.qq.com", "飞书文档", "Feishu Docs", "Lark Docs")
+_CHAT_HINTS = ("的聊天", "群聊", "聊天记录", "群公告")
+_EMBED_APPS = {"wechat.exe", "weixin.exe", "feishu.exe", "wxwork.exe", "dingtalk.exe"}
+
+
+def is_article_title(title: str) -> bool:
+    text = title or ""
+    if not text or any(h in text for h in _CHAT_HINTS):
+        return False
+    return any(h in text for h in _ARTICLE_HINTS)
+
+
 def classify(app: str, title: str) -> str:
     a = (app or "").lower()
     t = title or ""
+    # 先判内置浏览器里的文章页：飞书/钉钉/企微同时在 MEET_APPS 里，
+    # 放在后面会被 "return meet" 提前截走，改判就永远不生效。
+    if a in _EMBED_APPS and is_article_title(t):
+        return "web"
     if a in MEET_APPS and re.search(r"会议|通话|meeting|共享", t):
         return "meet"
     if a in DEV_APPS:
@@ -101,6 +121,8 @@ class Block:
     continuation: bool = False
     content_policy: str = "allowed"
     idle_seconds: float = 0.0
+    # 1.3.0：报告期反查到的来源链接（不参与 block_id 计算）
+    urls: list = field(default_factory=list)
 
     @property
     def duration(self) -> float:

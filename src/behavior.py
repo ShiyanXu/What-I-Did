@@ -76,7 +76,9 @@ CAT_TO_VERB = {
     "dev": "coding",
     "doc": "writing",
     "meet": "meeting",
-    "comm": "communicating",
+    # 聊天窗口只能证明"在看在读"：没有我方消息气泡就不能算沟通过。
+    # 兜底路径没有 OCR，判断不了有没有发消息，一律按 reading 降级。
+    "comm": "reading",
     "web": "reading",
     "other": "admin",
 }
@@ -89,7 +91,7 @@ _HINTS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(?i)figma|sketch|原型|架构|流程图|脑图|xmind|design"), "designing"),
     (re.compile(r"(?i)cargo|npm|pip|docker|kubectl|git |部署|安装|配置|环境变量|conda"), "operating"),
     (re.compile(r"(?i)会议|通话|meeting|评审|沟通|周会"), "meeting"),
-    (re.compile(r"(?i)微信|飞书|钉钉|邮件|mail|群|消息"), "communicating"),
+    (re.compile(r"(?i)微信|飞书|钉钉|邮件|mail|群|消息"), "reading"),
     (re.compile(r"(?i)github|stackoverflow|文档|手册|api|issue|搜索|百度|google|知乎"), "reading"),
 ]
 

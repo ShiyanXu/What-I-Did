@@ -6,11 +6,12 @@
 
 | 改了哪里 | 必跑 | 建议加跑 |
 |---|---|---|
-| 任何 `src/*.py` | `check_privacy.py` + `check_boundaries.py` | — |
+| 任何 `src/*.py` | `check_privacy.py` + `check_boundaries.py`（必须隔离 `WID_HOME`） | — |
 | `privacy.py`、`digest.py`、`llm.py`、`config.py` | 同上 + `dev_fixture.py --mock`（空跑全链路） | 用真实某天重出一份报告人工读 |
 | `gui.py`、`tray.py`、`i18n*` | 同上 + `gui_regression.py` | `verify_dpi.py` |
 | `build.spec`、`scripts/build_dist.py` | 重建 dist + `verify_artifact()` + 双击 exe | `doctor --full`（打包版） |
 | 模板 `src/templates/*` | 同上 + 重出一天看 HTML | 检查空数据/缺字段的天 |
+| Harness 文件、`scripts/harness.py`、`scripts/check_harness.py` | `scripts/harness.py check` | 全新会话五问测试 |
 | 文档 / 注释 / CHANGELOG | 无 | — |
 
 ## 二、命令与期望
@@ -18,14 +19,24 @@
 ```bash
 PY=C:/Users/xushiyan/AppData/Local/Programs/Python/Python310/python.exe
 
-$PY scripts/check_privacy.py        # 期望：73 项全 ok，0 failed
-$PY scripts/check_boundaries.py     # 期望：27 项全 ok，0 failed（需先有样本日，见下文）
+$PY scripts/harness.py check        # 期望：Harness + 隐私 + 隔离 E2E 全 ok（E2E 自带临时 WID_HOME）
+$PY scripts/check_privacy.py        # 期望：全部 ok，0 failed；项数以当次输出为准
+
+# 边界自测会清掉并重写样本日的 manual.json、还会写周汇总，必须隔离：
+mkdir -p .tmp_wid_verify
+WID_HOME="$PWD/.tmp_wid_verify" $PY scripts/dev_fixture.py --day 2026-10-18 --mock
+WID_HOME="$PWD/.tmp_wid_verify" $PY scripts/check_boundaries.py   # 期望：全部 ok，0 failed
+rm -rf .tmp_wid_verify              # 跑完删掉，别留在仓库里
+
 $PY scripts/verify_dpi.py           # 期望：14 项全 ok
 $PY scripts/gui_regression.py       # 期望：全 ok；项数随分支变化（v1.2.1 实测 41）
 $PY wid.py doctor --full            # 期望：全部 ok，末尾 summary 无 failed
 ```
 
-前两条的项数在 2026-11-05 复跑确认过（73 / 27）。**`gui_regression` 的项数是浮动的**：
+**不设 `WID_HOME` 直接跑 `check_boundaries.py` 会返回 2**：脚本在真实数据目录里会先删样本日的
+`manual.json` 再写入合成补录，等于毁掉当天的人工修改。这个门禁是有意加的，不要为了"跑通"去绕过。
+
+测试项数会随分支和条件分支变化，以当次脚本的「通过 / 失败」汇总为准。**`gui_regression` 的项数同样是浮动的**：
 脚本里有条件分支，不同环境会走不同分支，静态 `check()` 调用点约 36 个。所以别把它当固定断言，
 跑完看「通过 / 失败」两栏即可。
 
@@ -37,12 +48,13 @@ $PY wid.py doctor --full            # 期望：全部 ok，末尾 summary 无 fa
 
 ## 三、各项覆盖什么
 
-- **`check_privacy.py`（73 项，不联网、不需样本）**
+- **`check_privacy.py`（不联网、不需样本）**
   断言「图片不出本机」「发送前必脱敏」「密钥/手机号/身份证/邮箱被替换」「分享版不含 block_id/seg_id」
   「隐私策略变更会中断请求」。改任何与数据外发相关的代码，这项失败意味着**不能发布**。
-- **`check_boundaries.py`（27 项，需要样本日）**
-  断言模块职责边界：报告层不直接读 events、渲染层不重算统计、行为段不越权改时间、
-  清理不删叙述、分享版可独立打开。它防的是「顺手把逻辑写到不该写的层」。
+- **`check_boundaries.py`（需要样本日，且必须设 `WID_HOME`）**
+  断言输入边界与异常路径：空关键词、日期/天数越界、损坏日报不影响检索与周汇总、空周也能出汇总、
+  人工补录幂等与时间补零、改标覆盖生效、分享版不含 `block_id`/`seg_id`。
+  它防的是「异常输入把报告写坏，或测试顺手覆盖了真实的人工修改」。
 - **`verify_dpi.py`（14 项）**
   高 DPI 下的坐标、字号、图片缩放；用 `dlineinfo()` 打 x 坐标核对左边界，**看截图会误判**。
 - **`gui_regression.py`（约 41 项，随分支浮动）**
@@ -73,7 +85,7 @@ rm -rf .tmp_verify
 | 现象 | 多半是什么 |
 |---|---|
 | `check_privacy` 报「发送前未脱敏」 | 新增的外发路径绕过了 `privacy.redact_value` |
-| `check_boundaries` 报「报告层直接读 events」 | 把统计写到了 `report.py` 而不是复用 `stats` |
+| `check_boundaries` 报断言失败 | 输入校验、manual 幂等/覆盖或 weekly 空周逻辑被改坏；看输出里具体 label |
 | `gui_regression` 报控件文案不符 | 改了文案没同步 `i18n_zh_cn.py`，或又出现了模块级 `t()` |
 | `doctor` 报 OCR 不可用 | Umi-OCR 没常驻，且内置模型缺失 |
 | 打包版一运行就 `ImportError` | 新增 `src/*.py` 忘了加进 `build.spec:MODULES` |

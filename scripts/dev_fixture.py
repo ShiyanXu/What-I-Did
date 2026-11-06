@@ -36,9 +36,12 @@ SAMPLE = [
     ("chrome.exe", "refs/providers.py · Issue #128 · hiroi-sora/Umi-OCR - Google Chrome", "dev", 18,
      "GitHub  hiroi-sora/Umi-OCR  Issues\n#128 HTTP 服务在 OCR 期间拒绝连接\n"
      "https://github.com/hiroi-sora/Umi-OCR/issues/128\n状态 Open · 3 comments"),
-    ("chrome.exe", "PaddleOCR 方向分类器 - Google Chrome", "web", 12,
+    ("chrome.exe", "PaddleOCR 方向分类器 - Google Chrome", "web", 20,
      "PaddleOCR 使用文档\nuse_angle_cls=True 时识别速度下降约 15%\n"
-     "https://github.com/PaddlePaddle/PaddleOCR/blob/main/README_ch.md"),
+     "https://github.com/PaddlePaddle/PaddleOCR/blob/main/README_ch.md",
+     # 地址栏兜底样本：带敏感参数与跟踪参数，验证归一化与打码
+     "https://github.com/PaddlePaddle/PaddleOCR/blob/main/README_ch.md"
+     "?token=SECRET-abc123&utm_source=mail"),
     ("Obsidian.exe", "08-P8 Flash Attention - Obsidian v1.5.3", "doc", 48,
      "Flash Attention 把 attention 的计算分块放进 SRAM\n"
      "核心是减少 HBM 读写次数\n输入 Q K V，块大小 Bc Br 需要按 SRAM 容量调"),
@@ -49,7 +52,8 @@ SAMPLE = [
      "本周进展\n1. 完成采集器与 OCR 链路\n2. 日报模板定稿\n遗留问题：Session 0 截图权限"),
     ("chrome.exe", "12X编译农场 - Google Chrome", "web", 20,
      "编译查询(新)  编译工程：请选择  编译分支：20261018170800  共 1 条\n"
-     "编译看板  系统设置  我的任务\n包: RGOS-12.X 编译输出 重新启动即可更新"),
+     "编译看板  系统设置  我的任务\n包: RGOS-12.X 编译输出 重新启动即可更新",
+     "learning.ruijie.com.cn/map/sub.aspx?mid=2906"),
     ("code.exe", "digest.py - What-I-Did - Visual Studio Code", "dev", 33,
      "def build_payload(day, blocks, stats, ...) -> tuple[str, dict]:\n"
      "    budget = int(cfg.get('llm.input_char_budget', 24000))\n"
@@ -82,7 +86,9 @@ def make_day(day: str, seed: int = 7) -> None:
     seq = 0
     cursor = base
 
-    for app, title, cat, minutes, text in SAMPLE:
+    for item in SAMPLE:
+        app, title, cat, minutes, text = item[:5]
+        addr = item[5] if len(item) > 5 else ""
         block_start = cursor
         # 每块按 20 秒采样，但只落 3 张图，模拟真实去重后的样子
         shots_at = {int(minutes * 60 * f) for f in (0.05, 0.45, 0.8)}
@@ -106,10 +112,20 @@ def make_day(day: str, seed: int = 7) -> None:
                 ev.update(cls="minor", img=f"shots/{name}.jpg", kind="shot")
                 oid = f"o{int(ts.timestamp())}{rnd.randrange(16**4):04x}"
                 ev["ocr"] = oid
-                ocrs.append({
+                rec = {
                     "id": oid, "status": "ok", "text": text, "ms": 1900 + rnd.randrange(900),
                     "engine": "umi_http", "error": "", "ts": ts.timestamp(), "day": day, "app": app,
-                })
+                }
+                if addr:
+                    # 顶部条带行坐标：窗口标题行 + 地址栏行 + 一行正文（把 height 撑到窗口底部，
+                    # 否则 top_ratio 会按“文字最低点”算，地址栏反被判为不在顶部）
+                    rec["lines"] = [
+                        {"y0": 18, "y1": 40, "text": title[:60]},
+                        {"y0": 58, "y1": 82, "text": addr},
+                        {"y0": 892, "y1": 926, "text": text.split("\n")[0][:80]},
+                    ]
+                    rec["height"] = 926
+                ocrs.append(rec)
                 shot_idx += 1
             events.append(ev)
         cursor = block_start + timedelta(minutes=minutes) + timedelta(minutes=rnd.choice([4, 6, 8]))

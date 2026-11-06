@@ -48,6 +48,7 @@
 | 去重 | 截图指纹 | 保留 / 丢弃 | `vision.py` |
 | 识别 | 活动窗口原生分辨率截图 | 脱敏文本 | `ocr.py` |
 | 分块 | 事件流 | 活动块 `b-YYYYMMDD-HHMM-xxxx` | `blocks.py` |
+| 补链接 | 活动块 + 本机浏览历史 | 每个网页块得到 `urls[]` | `browse.py` |
 | 分段 | 活动块 | 行为段 `seg-NN` | `behavior.py` |
 | 引用 | 标题与 OCR 文本 | `ref_id` 与可点链接 | `refs/` |
 | 压缩 | 块、段、统计、引用、人工补录 | 受字符预算约束的 payload | `digest.py` |
@@ -55,13 +56,15 @@
 | 校验 | 模型 JSON | 结构化日报或问题清单 | `validate.py` |
 | 落盘 | 日报数据 | `reports/<日期>.json/.md`、`web/` | `render.py`、`report.py` |
 
-三段值得展开：
+四段值得展开：
 
 **采样与去重。** 每次采样读前台窗口的句柄、标题、进程名、矩形，以及空闲秒数与锁屏状态。截图默认只抓活动窗口，用 dHash 汉明距离与 12×8 网格均值差共同判断"是否变化"；变化帧落盘，画面长期不变时按 `keyframe_sec` 留关键帧，保证时间轴不断档。窗口矩形拿不到或裁剪失败时**跳过这一帧，不回退全屏**——宁可少记，不可错记。
 
 **分块与分段。** 相邻事件间隔超过 `gap_threshold_min` 就断开；单块最长 `max_block_min`（默认 30 分钟）强制切开；块内被暂停、锁屏、名单屏蔽覆盖的区间从 `active_seconds` 中扣除，单独记为 `idle_minutes`。行为段进一步按主分类变化切分，单段最长 `max_session_min`，并补 `start_iso` / `end_iso` 以避免跨午夜错位。
 
 块的 ID 是 `b-YYYYMMDD-HHMM-<hash4(app+title)>`，只由当天日期、块起始分钟与应用/标题决定。**重跑、补数据、重新分块都不会改变它**，所以它可以作为 HTML 锚点，也可以被外部文档反向引用。
+
+**来源链接。** `browse.py` 在分块之后、任何压缩之前跑。它把浏览器 `History` 拷进 `state/tmp`、只读打开、取出当天的访问，查完即删。匹配分两级，因为 `visits` 只记录「导航」：读一篇半小时的文章只在开头留一行。块内（含 `ahead_sec`）的访问可以贡献多条链接，只保留与最优分接近的；块内没有时，只在 `lookback_sec` 内取它之前**最近一次**访问。打分是 `0.6 × 标题相似度 + 0.4 × 时间接近度`，标题对上比时间凑巧更值钱。历史给不出东西时先试地址栏条带（只对存了行坐标的采集有效），再退到只留站点域名，标 `source: domain`。结果用一次 `os.replace` 写进 `data/<日>/urls.jsonl`，中途失败不会留下半份文件。
 
 **压缩与校验。** `digest.py` 把一天压进 `llm.input_char_budget`（默认 24,000 字符）：先给统计、块清单、行为段、引用分配额度，逐档裁剪，最后兜底截断并注明截掉了什么。模型返回后 `validate.py` 检查每个 `block_id` / `ref_id` / `seg_id` 是否真实存在，缺失或伪造的引用记入 `issues`；JSON 结构坏掉时把错误回灌重试一次，仍失败则降级。
 
@@ -104,6 +107,7 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
 | | `vision.py` | dHash、网格指纹、分类、降采样、原子写 |
 | | `ocr.py` | 引擎选择与降级、队列、配额、看门狗、恢复探测 |
 | 加工 | `blocks.py` | 事件 → 活动块，稳定 ID，统计 |
+| | `browse.py` | 出报时读本机 Chrome/Edge 历史，把访问匹配到网页块（历史 → 地址栏 → 仅域名） |
 | | `behavior.py` | 活动块 → 行为段；动词词表是唯一来源 |
 | | `digest.py` | 压缩进预算；提示词 |
 | | `refs/` | 引用抽取、解析、去重、缓存 |
@@ -181,6 +185,7 @@ WhatIDid-Report 任务 → tick.run() → tick.pending(cfg, now, days) → 逐�
   data\<日期>\
     events.jsonl           事件流
     ocr.jsonl              脱敏后的识别结果
+    urls.jsonl             当天匹配到的来源链接（仅在开启浏览历史时才有）
     manual.json            人工补录与改标
     shots\ thumbs\         变化帧与缩略图
   reports\<日期>.md/.json  日报

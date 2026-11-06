@@ -17,25 +17,32 @@ Windows 本地工具：每 20 秒截一次前台窗口 → 本地 OCR → 按停
 | 问题 | 一句话答案 | 详见 |
 |---|---|---|
 | **这是什么系统** | 采集与 OCR 全在本机，模型只把「屏幕上出现过什么」翻译成结构化日报，排版、时间、统计一律本地算 | `README.md`、`agents/architecture.md` |
-| **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 33 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
+| **怎么组织的** | `wid.py` 单入口（23 个子命令，无参数直接开界面）/ `src/` 34 个模块，按 采集 → 分块 → 行为分段 → 摘要 → 校验 → 渲染 分层；`src/refs/` 负责文档引用解析 | `agents/architecture.md` |
 | **怎么运行** | `python wid.py` 开界面；`wid.py daemon` 常驻采集；`wid.py report --date YYYY-MM-DD --no-open` 手动出某天报告 | `agents/environment.md` |
-| **怎么验证** | 改任何代码先跑 `check_privacy`（73 项）+ `check_boundaries`（27 项）；发版前 `doctor --full`，必要时 `verify_dpi`（14）/ `gui_regression`（项数随分支浮动，约 41） | `agents/verification.md` |
-| **现在进度如何** | v1.2.2 已发布（tag 与 GitHub Release 都在），HEAD 已推送、工作区干净；DPI 与 GUI 回归**本版未重跑** | `PROGRESS.md` |
+| **怎么验证** | 先跑 `scripts/harness.py check`（Harness 自测 + 隐私 + 隔离 E2E）；发版前 `doctor --full`，必要时按改动加跑 DPI / GUI 回归 | `agents/harness.md`、`agents/verification.md` |
+| **现在进度如何** | v1.2.2 已发布；**v1.3.0（来源链接）代码完成、自测全绿，产物已落 `release/`，tag 未打** | `PROGRESS.md` |
 
-## 三条最常用命令
+## 常用命令
 
 Python 必须是 **3.10 那个**（PATH 里的托管版 3.13 没有 tkinter）：
 
 ```bash
 PY=C:/Users/xushiyan/AppData/Local/Programs/Python/Python310/python.exe   # 换成你本机带 tkinter 的 3.10
+$PY scripts/harness.py check                  # Harness + 隐私 + 隔离 E2E（项数以输出为准）
 $PY wid.py doctor --full                      # 环境与链路自检
-$PY scripts/check_privacy.py && $PY scripts/check_boundaries.py   # 73 + 27 项
+$PY scripts/check_privacy.py                  # 只跑隐私（不需样本、不联网）
+
+# 边界自测必须隔离：它会清掉并重写样本日的 manual.json、还会写周汇总
+mkdir -p .tmp_wid_test
+WID_HOME="$PWD/.tmp_wid_test" $PY scripts/dev_fixture.py --day 2026-10-18 --mock
+WID_HOME="$PWD/.tmp_wid_test" $PY scripts/check_boundaries.py
+rm -rf .tmp_wid_test
+
 $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 ```
 
-`check_boundaries` 需要样本日：干净克隆里先跑 `$PY scripts/dev_fixture.py --day 2026-10-18 --mock`，
-否则它会因找不到 `reports/2026-10-18.json` 直接返回 2。**这两条命令在任何机器上都成立**，
-`PY` 那条路径只是所有者机器的取值。
+`check_boundaries` 不设 `WID_HOME` 会直接返回 2——这是有意的门禁，别为了跑通去绕过；在真实数据目录里
+裸跑会毁掉当天的人工补录。**这些命令在任何机器上都成立**，`PY` 那条路径只是所有者机器的取值。
 
 ## 硬约束（违反会出事故，不是建议）
 
@@ -62,9 +69,10 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 ## 上班 / 下班
 
 **上班（新会话第一件事）**：读 `PROGRESS.md` → `git status --short`、`git log --oneline -3` 看最近改动 →
-跑一次隐私 + 边界自测确认基线是绿的。
+按 `agents/harness.md` 运行 `init.sh` 与 `harness.py status`，从功能清单接续，不凭聊天记录猜。
 
-**下班（会话结束前）**：更新 `PROGRESS.md` 五段 → 自测全绿 → 清掉临时文件与调试残留 →
+**下班（会话结束前）**：逐项过 `clean-state-checklist.md` → 更新 `PROGRESS.md` 五段与必要的
+`session-handoff.md` → 自测全绿 → 清掉临时文件与调试残留 →
 需要交付的改动转到提交侧（本机是转载成 `W:` 上的 `.new`）→ **不自行 commit**，把 `mv` / commit / push
 的清单写清楚交给能提交的人。
 
@@ -73,6 +81,11 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 | 文件 | 什么时候读 |
 |---|---|
 | `PROGRESS.md` | 每次会话开始、结束时 |
+| `agents/harness.md` | 初始化、选功能、改功能状态、留验证证据或交接前 |
+| `sprint-contract.md` | 开工前定这一轮的范围、排除项和停止条件；范围变了先改它 |
+| `clean-state-checklist.md` / `session-handoff.md` | 收尾自检；长会话交接前 |
+| `evaluator-rubric.md` / `quality-document.md` | 独立评审打分；重要会话后调质量评级 |
+| `graph.md` | 想引入自动循环、并行或步骤恢复之前 |
 | `agents/architecture.md` | 要改数据流、加模块、动 block/segment/refs 结构时 |
 | `agents/conventions.md` | 写新代码、动 i18n、加配置项、改模板时 |
 | `agents/verification.md` | 决定「这次改动该跑哪些自测」时 |
@@ -85,10 +98,18 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 ```
 .                          ← 仓库根（本文件所在处）
 ├── wid.py                 ← 单入口：23 个子命令（无参数即界面），也是打包后的唯一 exe
-├── src/                   ← 33 个模块（含 i18n 词条表），见 agents/architecture.md 的分层表
+├── src/                   ← 34 个模块（含 i18n 词条表），见 agents/architecture.md 的分层表
 │   ├── templates/         ← Jinja2：day / index / report.md / _style
 │   └── refs/              ← 文档引用解析（providers / extract / resolve）
-├── scripts/               ← build_dist、check_privacy、check_boundaries、dev_fixture、gui_regression…
+├── scripts/               ← harness、build_dist、check_privacy、check_boundaries、dev_fixture…
+├── feature_list.json      ← 机器可读功能状态；只能由 scripts/harness.py 改状态
+├── init.sh                ← 依赖 + 完整检查 + 标准启动入口
+├── sprint-contract.md     ← 冲刺目标、范围、验证标准、排除项与停止条件
+├── clean-state-checklist.md   ← 收尾逐项自检
+├── session-handoff.md     ← 长会话交接（短会话写 PROGRESS.md 即可）
+├── evaluator-rubric.md    ← 独立验收评分表
+├── quality-document.md    ← 各区域质量快照（变强还是变弱）
+├── graph.md               ← 单循环路由蓝图与图化升级判据
 ├── docs/                  ← 面向使用者的双语文档（会打进发布包）
 ├── agents/                ← 本目录：给 agent 看的工程文档（不打包）
 ├── requirements.txt       ← 运行与构建依赖的版本基线
@@ -99,3 +120,6 @@ $PY wid.py report --date 2026-11-04 --no-open # 重出某天（会调模型）
 **本机（所有者机器）额外多出来的东西，克隆里不存在**：工作副本 `dev/`、发布产物 `release/v<版本>/`、
 打包脚本 `publish.py`、工作区分工说明 `WORKSPACE.md`、生产实例 `D:\What-IDid`、SMB 上的提交源
 `W:\What-I-Did`。要从头复现发布流程，凭仓库里的 `agents/workflow.md` 第五节即可，不需要这些文件。
+
+若 `git status --short` 里出现上表文件是未跟踪（`??`）或已修改（`M`），只说明**本机改动还没经提交侧入库**：
+以磁盘为准继续工作，不要回退、不要重建、也不要据此认为文档失实；入库流程见 `agents/workflow.md`。

@@ -265,6 +265,20 @@ def _generate_locked(day: str, cfg, log, reason: str, force: bool,
             log.info("%s has no capture data; skipping", day)
         return {"status": "nodata", "day": day, "reason": "no_events"}
     all_blocks = blocks_mod.build_blocks(events, ocr_map, cfg)
+    # 来源链接：报告期反查浏览器历史（默认关，设置里开）。失败静默降级，绝不影响出报。
+    try:
+        import browse as browse_mod
+
+        url_map = browse_mod.enrich(cfg, day, all_blocks, ocr_map, log)
+        if url_map:
+            for blk in all_blocks:
+                got = url_map.get(blk.id)
+                if got:
+                    blk.urls = got
+    except Exception as exc:  # noqa: BLE001
+        if log:
+            log.warning("%s: source-link lookup failed (%s); continuing without URLs",
+                        day, type(exc).__name__)
     stats = blocks_mod.summarize(all_blocks)
     sessions = behavior_mod.build_sessions(all_blocks, cfg)
     # 行为段合并了"块间隙 < 10 分钟"的连续工作，最长专注必须按它算

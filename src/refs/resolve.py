@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import paths
+import privacy
 import yaml
 from refs.extract import RefCandidate, extract_from_blocks
 from refs.providers import FileIndex, ResolvedRef, build_providers
@@ -173,6 +174,10 @@ class RefResolver:
                 "why": resolved.why,
                 "clickable": self._clickable(resolved.kind, resolved.uri),
             }
+            # 1.3.0：来源链接的通道与去重键。旧报告没有这两个字段，模板用 .get() 读。
+            if resolved.source:
+                rec["source"] = resolved.source
+                rec["canonical"] = privacy.canonical_url(resolved.uri, self.cfg) or resolved.uri
             out.append(rec)
             if not resolved.why.startswith("缓存命中"):
                 new_cache.append({
